@@ -29,8 +29,6 @@ def gross_profit_to_assets(db, annual=False, verbose=False, name='f_gpta'):
 
     # save the file 
     save_file(fund_df, name)
-
-    print(f"Saved gross_profit_to_assets {name} to data/factors/{name}.csv")
     return
 
 def sales_to_price(db, annual=False, verbose=False, name='f_sp'):
@@ -41,16 +39,14 @@ def sales_to_price(db, annual=False, verbose=False, name='f_sp'):
 
         fund_df['saleq_ltm'] = round(fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(window=4).sum()), 2)
 
-        price_df = marketcap_calculator(db)
+        marketcap_df = marketcap_calculator(db)
 
-        # merge the fund_df and price_df
-        price_df = pd.merge_asof(price_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
-        price_df[name] = price_df['saleq_ltm'] / price_df['marketcap']
+        # merge the fund_df and marketcap_df
+        marketcap_df = pd.merge_asof(marketcap_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
+        marketcap_df[name] = marketcap_df['saleq_ltm'] / marketcap_df['marketcap']
 
         if verbose:
-            print(price_df.query("gvkey == '001690'"))
+            print(marketcap_df.query("gvkey == '001690'"))
 
-        save_file(price_df, name)
-    
-    print(f"Saved sales_to_price {name} to data/factors/{name}.csv")
+        save_file(marketcap_df, name)
     return
