@@ -3,6 +3,8 @@ import pandas as pd
 import tqdm
 import numpy as np
 import glob
+from utils.merger import merge_link_table_crsp
+from utils.clean import crsp_clean
 
 def get_fundq(db, fund_list, start_year=2000):
     """
@@ -40,10 +42,16 @@ def get_fundq(db, fund_list, start_year=2000):
         AND f.fyearq >= {start_year}
         AND f.rdq IS NOT NULL
         AND f.datadate IS NOT NULL
-        ORDER BY f.datadate ASC
+        ORDER BY f.rdq ASC
     """
 
-    return db.raw_sql(sql)
+    df = db.raw_sql(sql)
+    df['datadate'] = pd.to_datetime(df['datadate'])
+    df['rdq'] = pd.to_datetime(df['rdq'])
+    # the fund list value should have precision of 2
+    for col in fund_list:
+        df[col] = df[col].astype(float).round(2)
+    return df
 
 def get_funda(db, fund_list, start_year=2000):
     """
@@ -81,7 +89,13 @@ def get_funda(db, fund_list, start_year=2000):
         ORDER BY f.datadate ASC
     """
 
-    return db.raw_sql(sql)
+    df = db.raw_sql(sql)
+    df['datadate'] = pd.to_datetime(df['datadate'])
+    df['rdq'] = pd.to_datetime(df['rdq'])
+    # the fund list value should have precision of 2
+    for col in fund_list:
+        df[col] = df[col].astype(float).round(2)
+    return df
 
 def get_crsp_daily(db, start_date='2000-01-01'):
     """
@@ -118,20 +132,15 @@ def get_crsp_daily(db, start_date='2000-01-01'):
         * Save each chunk as a separate Parquet file in 'data/crsp/parts/'.
         * Concatenate all chunk files into a single DataFrame, save to the cache, and return.
     - This process may take a long time and require significant disk space.
-
-    Example
-    -------
-    >>> df = get_crsp_daily(db)
-    >>> df.head()
     """
     # Retrieve unique PERMCOs from the Compustat-CRSP link table
     link_df = permco_gvkey_link(db)
-    permco_list = link_df['permco'].dropna().astype(int).unique()
+    permco_list = link_df['permco'].dropna().unique()
 
     cache_path = "data/crsp/crsp_daily.parquet"
     if os.path.exists(cache_path):
         print("Cache file for CRSP daily data found. Loading from disk...")
-        return pd.read_parquet(cache_path).merge(link_df, on=['permco', 'permno'], how='left')
+        return merge_link_table_crsp(link_df, crsp_clean(pd.read_parquet(cache_path)))
 
     print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
 
@@ -177,7 +186,8 @@ def get_crsp_daily(db, start_date='2000-01-01'):
 
     # merge link table with price_df_agg
     link_df = permco_gvkey_link(db)
-    return price_df_agg.merge(link_df, on=['permco', 'permno'], how='left')
+    return merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
+
 
 def permco_gvkey_link(db):
     """
@@ -193,12 +203,33 @@ def permco_gvkey_link(db):
         Link table with GVKEY, PERMNO, PERMCO, etc.
     """
     sql = """
-    SELECT gvkey, liid, linkdt, linkenddt, lpermno, lpermco
+    SELECT gvkey, liid, linkdt, COALESCE(linkenddt, '2059-12-31') as linkenddt, lpermno, lpermco, linkprim
     FROM crsp.ccmxpf_linktable
     WHERE linktype IN ('LU', 'LC')   -- standard links (LU = link to common, LC = link to company)
-      AND linkprim IN ('P', 'C')     -- primary links (P = primary, C = company)
+      AND linkprim IN ('P', 'J', 'C')     -- primary links (P = primary, C = company)
       AND lpermno IS NOT NULL   
     """
-    print(db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'}))
-    assert False
-    return db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'})
+    
+    link_df = db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'})
+    link_df['permno'] = link_df['permno'].astype(int)
+    link_df['permco'] = link_df['permco'].astype(int)
+    return link_df
+
+
+def marketcap_calculator(db, verbose=False):
+    """
+    Calculate market cap from CRSP daily data.
+    """
+    crsp_df = get_crsp_daily(db)
+    crsp_df['marketcap_permno'] = crsp_df['prc'] * crsp_df['shrout']
+    if verbose:
+        print(crsp_df.query("gvkey == '002176'")) # berkshire hathaway
+    # sum across different permno for each permco (account for different share class)
+    crsp_df = crsp_df.groupby(['date','permco', 'gvkey']).agg({'marketcap_permno': 'sum'}).reset_index()
+    crsp_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
+    
+    # round to integer
+    crsp_df['marketcap'] = crsp_df['marketcap'].astype(int)
+    if verbose:
+        print(crsp_df.query("gvkey == '002176'"))
+    return crsp_df

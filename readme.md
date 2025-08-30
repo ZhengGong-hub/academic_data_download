@@ -14,4 +14,4 @@ step 3: join everything we need to form a final.csv
 Q: chunks in the interim?
 
 Q: what should we do when we have 2 permco -> 1 gvkey? at a given date 
-A: drop them. only 65 such companies
+A: no. never happen after we control for link-table's valid linkdt and linkenddt
