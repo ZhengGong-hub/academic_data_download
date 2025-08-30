@@ -9,7 +9,8 @@ authors = [
 dependencies = [
     "SQLAlchemy>=2.0.0",
     "wrds>=3.0.0",
-    "python-dotenv==1.1.1"
+    "python-dotenv==1.1.1",
+    "fastparquet==2024.11.0"
 ]
 
 [tool.black]

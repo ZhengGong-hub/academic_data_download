@@ -6,6 +6,16 @@ print("pandas:", pd.__version__)
 
 db = wrds.Connection(wrds_username="zhenggong123", wrds_password="zishak-zighi8-bohCig", use_keyring=False)
 
+permcos = [21913, 12895]  # example
+query = f"""
+    SELECT *
+    FROM crsp.stocknames
+    WHERE permco IN ({",".join(map(str, permcos))})
+"""
+print(db.raw_sql(query))
+assert False
+
+
 security_identifier = db.raw_sql("""
     SELECT *
     FROM comp.security

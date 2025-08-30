@@ -1,5 +1,26 @@
+import os
+import pandas as pd
+import tqdm
+import numpy as np
+import glob
+
 def get_fundq(db, fund_list, start_year=2000):
-    # the columns is a list, we need to get to the formaat of f.column1, f.column2, ...
+    """
+    Get quarterly fundamental data from Compustat FUNDQ.
+
+    Parameters
+    ----------
+    db : database connection
+    fund_list : list of str
+        Columns to retrieve (e.g., ['saleq', 'cogsq', 'atq']).
+    start_year : int, optional
+        Earliest fiscal year (default 2000).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Quarterly data with requested columns.
+    """
     fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
     print(fund_list_sql)
     sql = f"""
@@ -25,7 +46,22 @@ def get_fundq(db, fund_list, start_year=2000):
     return db.raw_sql(sql)
 
 def get_funda(db, fund_list, start_year=2000):
-    # the columns is a list, we need to get to the formaat of f.column1, f.column2, ...
+    """
+    Get annual fundamental data from Compustat FUNDA.
+
+    Parameters
+    ----------
+    db : database connection
+    fund_list : list of str
+        Columns to retrieve (e.g., ['sale', 'cogs', 'at']).
+    start_year : int, optional
+        Earliest fiscal year (default 2000).
+
+    Returns
+    -------
+    pandas.DataFrame
+        Annual data with requested columns.
+    """
     fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
     print(fund_list_sql)
     sql = f"""
@@ -46,3 +82,123 @@ def get_funda(db, fund_list, start_year=2000):
     """
 
     return db.raw_sql(sql)
+
+def get_crsp_daily(db, start_date='2000-01-01'):
+    """
+    Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
+    with optional local caching to avoid repeated expensive SQL queries.
+
+    This function will:
+      - Check for a local Parquet cache of the full CRSP daily dataset.
+      - If the cache exists, load and return it.
+      - If not, query the database in manageable chunks (by PERMCO), save each chunk to disk,
+        merge all chunks, cache the result, and return the full DataFrame.
+
+    Parameters
+    ----------
+    db : object
+        Database connection object with a .raw_sql() method for executing SQL queries.
+    start_date : str, optional
+        Earliest date to retrieve (format: 'YYYY-MM-DD'). Default is '2000-01-01'.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing daily CRSP data with columns:
+        ['permco', 'permno', 'date', 'prc', 'ret', 'vol', 'shrout', 'cfacpr', 'cfacshr']
+
+    Notes
+    -----
+    - The function uses a local Parquet file at 'data/crsp/crsp_daily.parquet' as a cache.
+    - If the cache is missing, the function will:
+        * Create necessary directories.
+        * Retrieve the list of unique PERMCOs from the Compustat-CRSP link table.
+        * Split the PERMCOs into 10 chunks to avoid overwhelming the database.
+        * For each chunk, query the CRSP DSF table for all dates >= start_date.
+        * Save each chunk as a separate Parquet file in 'data/crsp/parts/'.
+        * Concatenate all chunk files into a single DataFrame, save to the cache, and return.
+    - This process may take a long time and require significant disk space.
+
+    Example
+    -------
+    >>> df = get_crsp_daily(db)
+    >>> df.head()
+    """
+    # Retrieve unique PERMCOs from the Compustat-CRSP link table
+    link_df = permco_gvkey_link(db)
+    permco_list = link_df['permco'].dropna().astype(int).unique()
+
+    cache_path = "data/crsp/crsp_daily.parquet"
+    if os.path.exists(cache_path):
+        print("Cache file for CRSP daily data found. Loading from disk...")
+        return pd.read_parquet(cache_path).merge(link_df, on=['permco', 'permno'], how='left')
+
+    print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
+
+    # Ensure required directories exist
+    os.makedirs('data', exist_ok=True)
+    os.makedirs('data/crsp', exist_ok=True)
+    os.makedirs('data/crsp/parts', exist_ok=True)
+
+    # Split PERMCOs into 10 roughly equal chunks for manageable queries
+    permco_chunks = np.array_split(permco_list, 10)
+
+    for idx, permco_chunk in enumerate(tqdm.tqdm(permco_chunks, desc="Downloading CRSP daily chunks")):
+        # Build SQL query for this chunk
+        permco_str = ', '.join(str(permco) for permco in permco_chunk)
+        sql = f"""
+            SELECT
+                a.permco,        
+                a.permno,
+                a.date,
+                a.prc,
+                a.ret,
+                a.vol,
+                a.shrout,
+                a.cfacpr,
+                a.cfacshr
+            FROM crsp.dsf a
+            WHERE 
+                a.permco IN ({permco_str})
+                AND a.date >= '{start_date}'
+            ORDER BY a.date;
+        """
+
+        # Execute query and save result to a Parquet part file
+        df = db.raw_sql(sql)
+        part_path = f'data/crsp/parts/crsp_daily_{idx}.parquet'
+        df.to_parquet(part_path, index=False)
+
+    # Merge all part files into a single DataFrame
+    print("Merging all CRSP daily part files into a single DataFrame...")
+    price_df_agg = pd.concat([pd.read_parquet(f) for f in glob.glob('data/crsp/parts/crsp_daily_*.parquet')], ignore_index=True)
+    price_df_agg.to_parquet(cache_path, index=False)
+    print(f"CRSP daily data SQL query complete. Data cached at {cache_path}")
+
+    # merge link table with price_df_agg
+    link_df = permco_gvkey_link(db)
+    return price_df_agg.merge(link_df, on=['permco', 'permno'], how='left')
+
+def permco_gvkey_link(db):
+    """
+    Get table mapping Compustat GVKEYs to CRSP PERMCOs and PERMNOs.
+
+    Parameters
+    ----------
+    db : database connection
+
+    Returns
+    -------
+    pandas.DataFrame
+        Link table with GVKEY, PERMNO, PERMCO, etc.
+    """
+    sql = """
+    SELECT gvkey, liid, linkdt, linkenddt, lpermno, lpermco
+    FROM crsp.ccmxpf_linktable
+    WHERE linktype IN ('LU', 'LC')   -- standard links (LU = link to common, LC = link to company)
+      AND linkprim IN ('P', 'C')     -- primary links (P = primary, C = company)
+      AND lpermno IS NOT NULL   
+    """
+    print(db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'}))
+    assert False
+    return db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'})
