@@ -12,13 +12,13 @@ FACTOR_PATH = 'data/factors'
 # connect to db
 db = connect_wrds(username=os.getenv("WRDS_USERNAME"), password=os.getenv("WRDS_PASSWORD"))
 
-gvkey_list = ['001690', '002176']
+gvkey_list = ['001690', '002176'] # berkshire and apple
 
 if not os.path.exists(f'{FACTOR_PATH}/f_gpta.csv'):
     print(gross_profit_to_assets(db, gvkey_list=gvkey_list, verbose=True, annual=False, name='f_gpta'))
 
-# if not os.path.exists(f'{FACTOR_PATH}/f_sp.csv'):
-#     sales_to_price(db, gvkey_list=gvkey_list, verbose=True, annual=False, name='f_sp')
+if not os.path.exists(f'{FACTOR_PATH}/f_sp.csv'):
+    sales_to_price(db, gvkey_list=gvkey_list, verbose=True, annual=False, name='f_sp')
 
 # pe 
 # btm
