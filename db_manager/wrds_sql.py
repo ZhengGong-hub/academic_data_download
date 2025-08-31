@@ -7,7 +7,7 @@ from utils.merger import merge_link_table_crsp
 from utils.clean import crsp_clean
 from utils.sneak_peek import sneak_peek
 
-def get_fundq(db, fund_list, gvkey_list=None, start_year=2000):
+def get_fundq(db, fund_list, verbose=False, gvkey_list=None, start_year=2000):
     """
     Get quarterly fundamental data from Compustat FUNDQ.
 
@@ -16,6 +16,8 @@ def get_fundq(db, fund_list, gvkey_list=None, start_year=2000):
     db : database connection
     fund_list : list of str
         Columns to retrieve (e.g., ['saleq', 'cogsq', 'atq']).
+    verbose : bool, optional
+        Whether to print the SQL query.
     start_year : int, optional
         Earliest fiscal year (default 2000).
     gvkey_list : list of str, optional
@@ -25,11 +27,12 @@ def get_fundq(db, fund_list, gvkey_list=None, start_year=2000):
         Quarterly data with requested columns.
     """
     fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
-    print(fund_list_sql)
-    if gvkey_list is not None:
-        gvkey_list_sql = ", ".join([f"f.gvkey IN ({gvkey_list})" for gvkey in gvkey_list])
-    else:
-        gvkey_list_sql = ""
+    if verbose: 
+        print(fund_list_sql)
+    # this is a sample gvkey_list: ['001690', '002176']
+    gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
+    if verbose:
+        print(gvkey_list_sql)
     sql = f"""
         SELECT
             f.gvkey,
@@ -47,7 +50,7 @@ def get_fundq(db, fund_list, gvkey_list=None, start_year=2000):
         AND f.fyearq >= {start_year}
         AND f.rdq IS NOT NULL
         AND f.datadate IS NOT NULL
-        AND {gvkey_list_sql}
+        {gvkey_list_sql}
         ORDER BY f.rdq ASC
     """
 

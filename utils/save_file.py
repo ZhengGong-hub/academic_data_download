@@ -14,3 +14,4 @@ def save_file(df, name):
 
     # save the file
     df.to_parquet(f'data/factors/{name}.parquet', index=False)
+    print(f"Saved {name} to data/factors/{name}.csv")

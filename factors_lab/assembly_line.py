@@ -27,11 +27,9 @@ def gross_profit_to_assets(db,gvkey_list=None, annual=False, verbose=False, name
         print("peeks at the data after calculation!")
         sneak_peek(fund_df)
 
-    # save the file 
-    save_file(fund_df, name)
-
-    print(f"Saved gross_profit_to_assets {name} to data/factors/{name}.csv")
-    return
+    if gvkey_list is None:
+        save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+    return f'Done with {name}'
 
 def sales_to_price(db, gvkey_list=None, annual=False, verbose=False, name='f_sp'):
     if not annual:
@@ -52,7 +50,6 @@ def sales_to_price(db, gvkey_list=None, annual=False, verbose=False, name='f_sp'
             print("peeks at the data after calculation!")
             sneak_peek(price_df)
 
-        save_file(price_df, name)
-    
-    print(f"Saved sales_to_price {name} to data/factors/{name}.csv")
-    return
+        if gvkey_list is None:
+            save_file(price_df, name) # only save the file if gvkey_list is None (meaning select all)
+    return f'Done with {name}'
