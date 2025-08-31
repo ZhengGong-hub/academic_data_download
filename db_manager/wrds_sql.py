@@ -5,8 +5,9 @@ import numpy as np
 import glob
 from utils.merger import merge_link_table_crsp
 from utils.clean import crsp_clean
+from utils.sneak_peek import sneak_peek
 
-def get_fundq(db, fund_list, start_year=2000):
+def get_fundq(db, fund_list, gvkey_list=None, start_year=2000):
     """
     Get quarterly fundamental data from Compustat FUNDQ.
 
@@ -17,7 +18,7 @@ def get_fundq(db, fund_list, start_year=2000):
         Columns to retrieve (e.g., ['saleq', 'cogsq', 'atq']).
     start_year : int, optional
         Earliest fiscal year (default 2000).
-
+    gvkey_list : list of str, optional
     Returns
     -------
     pandas.DataFrame
@@ -25,6 +26,10 @@ def get_fundq(db, fund_list, start_year=2000):
     """
     fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
     print(fund_list_sql)
+    if gvkey_list is not None:
+        gvkey_list_sql = ", ".join([f"f.gvkey IN ({gvkey_list})" for gvkey in gvkey_list])
+    else:
+        gvkey_list_sql = ""
     sql = f"""
         SELECT
             f.gvkey,
@@ -42,6 +47,7 @@ def get_fundq(db, fund_list, start_year=2000):
         AND f.fyearq >= {start_year}
         AND f.rdq IS NOT NULL
         AND f.datadate IS NOT NULL
+        AND {gvkey_list_sql}
         ORDER BY f.rdq ASC
     """
 
@@ -216,20 +222,24 @@ def permco_gvkey_link(db):
     return link_df
 
 
-def marketcap_calculator(db, verbose=False):
+def marketcap_calculator(db, gvkey_list=None, verbose=False):
     """
     Calculate market cap from CRSP daily data.
     """
     crsp_df = get_crsp_daily(db)
     crsp_df['marketcap_permno'] = crsp_df['prc'] * crsp_df['shrout']
-    if verbose:
-        print(crsp_df.query("gvkey == '002176'")) # berkshire hathaway
+
     # sum across different permno for each permco (account for different share class)
     crsp_df = crsp_df.groupby(['date','permco', 'gvkey']).agg({'marketcap_permno': 'sum'}).reset_index()
     crsp_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
     
     # round to integer
     crsp_df['marketcap'] = crsp_df['marketcap'].astype(int)
+
+    # only keep the gvkey in the gvkey_list
+    if gvkey_list is not None:
+        crsp_df = crsp_df[crsp_df['gvkey'].isin(gvkey_list)]
+        
     if verbose:
-        print(crsp_df.query("gvkey == '002176'"))
+        sneak_peek(crsp_df)
     return crsp_df
