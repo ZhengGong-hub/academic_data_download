@@ -1,5 +1,5 @@
 # compute factors
-from factors_lab.assembly_line import gross_profit_to_assets, sales_to_price
+from factors_lab.assembly_line import FactorComputer
 from utils.wrds_connect import connect_wrds
 import os
 import dotenv
@@ -14,11 +14,19 @@ db = connect_wrds(username=os.getenv("WRDS_USERNAME"), password=os.getenv("WRDS_
 
 gvkey_list = ['001690', '002176'] # berkshire and apple
 
-if not os.path.exists(f'{FACTOR_PATH}/f_gpta.csv'):
-    print(gross_profit_to_assets(db, gvkey_list=gvkey_list, verbose=True, annual=False, name='f_gpta'))
+FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
 
-if not os.path.exists(f'{FACTOR_PATH}/f_sp.csv'):
-    sales_to_price(db, gvkey_list=gvkey_list, verbose=True, annual=False, name='f_sp')
+FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
+
+FactorComputer.sales_to_price(qtr=True, name='f_sp')
+
+FactorComputer.btm(qtr=True, name='f_btm')
+
+FactorComputer.debt_to_equity(qtr=True, name='f_dte')
+
+FactorComputer.earnings_to_price(qtr=True, name='f_ep')
+
+FactorComputer.cashflow_to_price(qtr=True, name='f_cfp')
 
 # pe 
 # btm

@@ -229,15 +229,22 @@ def marketcap_calculator(db, gvkey_list=None, verbose=False):
     """
     Calculate market cap from CRSP daily data.
     """
-    crsp_df = get_crsp_daily(db)
-    crsp_df['marketcap_permno'] = crsp_df['prc'] * crsp_df['shrout']
+    os.makedirs('data/crsp', exist_ok=True)
+    if not os.path.exists(f'data/crsp/marketcap.parquet'):
+        crsp_df = get_crsp_daily(db)
+        crsp_df['marketcap_permno'] = crsp_df['prc'] * crsp_df['shrout']
 
-    # sum across different permno for each permco (account for different share class)
-    crsp_df = crsp_df.groupby(['date','permco', 'gvkey']).agg({'marketcap_permno': 'sum'}).reset_index()
-    crsp_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
-    
-    # round to integer
-    crsp_df['marketcap'] = crsp_df['marketcap'].astype(int)
+        # sum across different permno for each permco (account for different share class)
+        crsp_df = crsp_df.groupby(['date','permco', 'gvkey']).agg({'marketcap_permno': 'sum'}).reset_index()
+        crsp_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
+        
+        # round to integer
+        crsp_df['marketcap'] = crsp_df['marketcap'].astype(int)
+        crsp_df['gvkey'] = crsp_df['gvkey'].astype("string")
+        crsp_df.to_parquet(f'data/crsp/marketcap.parquet', index=False)
+    else:
+        crsp_df = pd.read_parquet(f'data/crsp/marketcap.parquet')
+        crsp_df['gvkey'] = crsp_df['gvkey'].astype("string")
 
     # only keep the gvkey in the gvkey_list
     if gvkey_list is not None:
