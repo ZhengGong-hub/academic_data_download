@@ -91,7 +91,7 @@ def get_funda(db, fund_list, start_year=2000):
 
     df = db.raw_sql(sql)
     df['datadate'] = pd.to_datetime(df['datadate'])
-    df['rdq'] = pd.to_datetime(df['rdq'])
+
     # the fund list value should have precision of 2
     for col in fund_list:
         df[col] = df[col].astype(float).round(2)
