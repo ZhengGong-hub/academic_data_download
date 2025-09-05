@@ -75,7 +75,7 @@ def return_on_assets(db, annual=False, verbose=False, name='f_roa'):
         
         # group by gvkey and rolling sum of ibq for the last 4 quarters
         fund_df['ibq_ltm'] = fund_df.groupby('gvkey')['ibq'].transform(lambda x: x.rolling(window=4).sum())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(window=4).mean())
+        fund_df['atq_ltm'] = fund_df['atq']
         
         # calculate return on assets
         fund_df[name] = fund_df['ibq_ltm'] / fund_df['atq_ltm']
@@ -88,6 +88,7 @@ def return_on_assets(db, annual=False, verbose=False, name='f_roa'):
     save_file(fund_df, name)
     return
 
+# TODO
 def sales_growth_rank(db, annual=False, verbose=False, name='f_sgr'):
     if annual:
         fund_df = get_funda(db, fund_list=["sale"])  # sale: sales
@@ -187,8 +188,8 @@ def investment_to_assets(db, annual=False, verbose=False, name='f_ita'):
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current and lagged assets
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['atq_ltm'] = fund_df['atq']
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
 
          # Calculate investment to assets
         fund_df[name] = (fund_df['atq_ltm']-fund_df['atq_lag']) / fund_df['atq_lag']
@@ -218,13 +219,13 @@ def changes_in_ppe(db, annual=False, verbose=False, name='f_ppe'):
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current and lagged assets
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
 
-        fund_df['invtq_ltm'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['invtq_lag'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['invtq_ltm'] = fund_df["invtq"]
+        fund_df['invtq_lag'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.shift(4))
 
-        fund_df['ppegtq_ltm'] = fund_df.groupby('gvkey')['ppegtq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ppegtq_lag'] = fund_df.groupby('gvkey')['ppegtq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['ppegtq_ltm'] = fund_df["ppegtq"]
+        fund_df['ppegtq_lag'] = fund_df.groupby('gvkey')['ppegtq'].transform(lambda x: x.shift(4))
 
         # Calculate change in ppe and inventory, scaled by assets
         fund_df[name] = ((fund_df['ppegtq_ltm'] - fund_df['ppegtq_lag']) + (fund_df['invtq_ltm'] - fund_df['invtq_lag'])) / fund_df['atq_lag']
@@ -282,11 +283,10 @@ def inventory_changes(db, annual=False, verbose=False, name='f_ic'):
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current and lagged values
-        fund_df['invtq_ltm'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-
-        fund_df['invtq_lag'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['invtq_ltm'] = fund_df["invtq"]
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['invtq_lag'] = fund_df.groupby('gvkey')['invtq'].transform(lambda x: x.shift(4))
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
 
         # Calculate inventory change
         fund_df[name] = (fund_df['invtq_ltm'] - fund_df['invtq_lag']) / (0.5*(fund_df['atq_ltm'] + fund_df['atq_lag']))
@@ -336,27 +336,27 @@ def operating_accruals(db, annual=False, verbose=False, name='f_oa'):
         #print(fund_df.dropna())
 
         # Get current and lagged values
-        fund_df['actq_ltm'] = fund_df.groupby('gvkey')['actq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['lctq_ltm'] = fund_df.groupby('gvkey')['lctq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlcq_ltm'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ivaoq_ltm'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ltq_ltm'] = fund_df.groupby('gvkey')['ltq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlttq_ltm'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ivstq_ltm'] = fund_df.groupby('gvkey')['ivstq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['pstkq_ltm'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['actq_ltm'] = fund_df["actq"]
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['cheq_ltm'] = fund_df["cheq"]
+        fund_df['lctq_ltm'] = fund_df["lctq"]
+        fund_df['dlcq_ltm'] = fund_df["dlcq"]
+        fund_df['ivaoq_ltm'] = fund_df['ivaoq'].transform(lambda x: x.fillna(0))
+        fund_df['ltq_ltm'] = fund_df["ltq"]
+        fund_df['dlttq_ltm'] = fund_df["dlttq"]
+        fund_df['ivstq_ltm'] = fund_df["ivstq"]
+        fund_df['pstkq_ltm'] = fund_df["pstkq"]
 
-        fund_df['actq_lag'] = fund_df.groupby('gvkey')['actq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['lctq_lag'] = fund_df.groupby('gvkey')['lctq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ltq_lag'] = fund_df.groupby('gvkey')['ltq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ivstq_lag'] = fund_df.groupby('gvkey')['ivstq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['actq_lag'] = fund_df.groupby('gvkey')['actq'].transform(lambda x: x.shift(4))
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
+        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4))
+        fund_df['lctq_lag'] = fund_df.groupby('gvkey')['lctq'].transform(lambda x: x.shift(4))
+        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4))
+        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.fillna(0).shift(4))
+        fund_df['ltq_lag'] = fund_df.groupby('gvkey')['ltq'].transform(lambda x: x.shift(4))
+        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4))
+        fund_df['ivstq_lag'] = fund_df.groupby('gvkey')['ivstq'].transform(lambda x: x.shift(4))
+        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4))
 
         # Calculate deltas
         fund_df['delta_coaq'] = (fund_df['actq_ltm'] - fund_df['cheq_ltm']) - (fund_df['actq_lag'] - fund_df['cheq_lag'])
@@ -399,30 +399,33 @@ def net_external_finance(db, annual=False, verbose=False, name='f_nef'):
         fund_df[name] = (fund_df['delta_equity'] + fund_df['delta_debt']) / (0.5*fund_df["at"] + 0.5*fund_df["at_lag"])
         
     else:
-        fund_df = get_fundq(db, fund_list=["sstky", "atq", "prstkcy", "dvcq", "dltisq", "dltrq", "dlcchq"]) # sstk: sale of common and preferred stocks, at: total assets, prstkc: purchase of common and preferred stocks, dvc: cash dividends, dltis: cash inflow issuance long-term debt, dltr: cash outflow reduction long-term debt, dlcch: change in current debt
+        fund_df = get_fundq(db, fund_list=["sstky", "atq", "prstkcy", "dvpsxq", "cshoq", "dltisy", "dltry", "dlcchy"]) # sstk: sale of common and preferred stocks, at: total assets, prstkc: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltis: cash inflow issuance long-term debt, dltr: cash outflow reduction long-term debt, dlcch: change in current debt
         if verbose:
             print(fund_df.query("gvkey == '001690'"))
+
+        # Declared dividends is not available on quarterly basis. Therefore, we construct an approximation
+        fund_df["dvcq"] = fund_df["dvpsxq"] * fund_df["cshoq"]
 
         # Get current and lagged values
         fund_df['sstky_ltm'] = fund_df.groupby('gvkey')['sstky'].transform(lambda x: x.rolling(4).sum())
         fund_df['prstkcy_ltm'] = fund_df.groupby('gvkey')['prstkcy'].transform(lambda x: x.rolling(4).sum())
         fund_df['dvcq_ltm'] = fund_df.groupby('gvkey')['dvcq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['dltisq_ltm'] = fund_df.groupby('gvkey')['dltisq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['dltrq_ltm'] = fund_df.groupby('gvkey')['dltrq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['dlcchq_ltm'] = fund_df.groupby('gvkey')['dlcchq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['dltisy_ltm'] = fund_df.groupby('gvkey')['dltisy'].transform(lambda x: x.rolling(4).sum())
+        fund_df['dltry_ltm'] = fund_df.groupby('gvkey')['dltry'].transform(lambda x: x.rolling(4).sum())
+        fund_df['dlcchy_ltm'] = fund_df.groupby('gvkey')['dlcchy'].transform(lambda x: x.rolling(4).sum())
+        fund_df['atq_ltm'] = fund_df["atq"]
 
         fund_df['sstky_lag'] = fund_df.groupby('gvkey')['sstky'].transform(lambda x: x.shift(4).rolling(4).sum())
         fund_df['prstkcy_lag'] = fund_df.groupby('gvkey')['prstkcy'].transform(lambda x: x.shift(4).rolling(4).sum())
         fund_df['dvcq_lag'] = fund_df.groupby('gvkey')['dvcq'].transform(lambda x: x.shift(4).rolling(4).sum())
-        fund_df['dltisq_lag'] = fund_df.groupby('gvkey')['dltisq'].transform(lambda x: x.shift(4).rolling(4).sum())
-        fund_df['dltrq_lag'] = fund_df.groupby('gvkey')['dltrq'].transform(lambda x: x.shift(4).rolling(4).sum())
-        fund_df['dlcchq_lag'] = fund_df.groupby('gvkey')['dlcchq'].transform(lambda x: x.shift(4).rolling(4).sum())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['dltisy_lag'] = fund_df.groupby('gvkey')['dltisy'].transform(lambda x: x.shift(4).rolling(4).sum())
+        fund_df['dltry_lag'] = fund_df.groupby('gvkey')['dltry'].transform(lambda x: x.shift(4).rolling(4).sum())
+        fund_df['dlcchy_lag'] = fund_df.groupby('gvkey')['dlcchy'].transform(lambda x: x.shift(4).rolling(4).sum())
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
 
         # Calculate deltas
         fund_df['delta_equityq'] = (fund_df['sstky_ltm'] - fund_df['prstkcy_ltm'] - fund_df['dvcq_ltm']) - (fund_df['sstky_lag'] - fund_df['prstkcy_lag'] - fund_df['dvcq_lag'])
-        fund_df['delta_debtq'] = (fund_df['dltisq_ltm'] - fund_df['dltrq_ltm'] - fund_df['dlcchq_ltm']) - (fund_df['dltisq_lag'] - fund_df['dltrq_lag'] - fund_df['dlcchq_lag'])
+        fund_df['delta_debtq'] = (fund_df['dltisy_ltm'] - fund_df['dltry_ltm'] - fund_df['dlcchy_ltm']) - (fund_df['dltisy_lag'] - fund_df['dltry_lag'] - fund_df['dlcchy_lag'])
 
         # Calculate net external finance
         fund_df[name] = (fund_df['delta_equityq'] + fund_df['delta_debtq']) / (0.5*fund_df["atq_ltm"] + 0.5*fund_df["atq_lag"])
@@ -462,23 +465,23 @@ def return_net_operating_assets(db, annual=False, verbose=False, name='f_rnoa'):
 
         # Get current and lagged values
         fund_df['oiadpq_ltm'] = fund_df.groupby('gvkey')['oiadpq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ivaoq_ltm'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlttq_ltm'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlcq_ltm'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ceqq_ltm'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['pstkq_ltm'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['mibq_ltm'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['cheq_ltm'] = fund_df["cheq"]
+        fund_df['ivaoq_ltm'] = fund_df["ivaoq"].transform(lambda x: x.fillna(0))
+        fund_df['dlttq_ltm'] = fund_df["dlttq"]
+        fund_df['dlcq_ltm'] = fund_df["dlcq"]
+        fund_df['ceqq_ltm'] = fund_df["ceqq"]
+        fund_df['pstkq_ltm'] = fund_df["pstkq"]
+        fund_df['mibq_ltm'] = fund_df["mibq"]
 
-        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['mibq_lag'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4))
+        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.fillna(0).shift(4))
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
+        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4))
+        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4))
+        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4))
+        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4))
+        fund_df['mibq_lag'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.shift(4))
 
         # Calculate net operating assets
         fund_df["noaq"] = (fund_df["atq_ltm"] - fund_df["cheq_ltm"] - fund_df["ivaoq_ltm"]) - (fund_df["atq_ltm"] - fund_df["dlttq_ltm"] - fund_df["dlcq_ltm"] - fund_df["ceqq_ltm"] - fund_df["pstkq_ltm"] - fund_df["mibq_ltm"])
@@ -548,23 +551,23 @@ def asset_turnover(db, annual=False, verbose=False, name='f_at'):
 
         # Get current and lagged values
         fund_df['saleq_ltm'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ivaoq_ltm'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlttq_ltm'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlcq_ltm'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ceqq_ltm'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['pstkq_ltm'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['mibq_ltm'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['cheq_ltm'] = fund_df["cheq"]
+        fund_df['ivaoq_ltm'] = fund_df["ivaoq"].transform(lambda x: x.fillna(0))
+        fund_df['dlttq_ltm'] = fund_df["dlttq"]
+        fund_df['dlcq_ltm'] = fund_df["dlcq"]
+        fund_df['ceqq_ltm'] = fund_df["ceqq"]
+        fund_df['pstkq_ltm'] = fund_df["pstkq"]
+        fund_df['mibq_ltm'] = fund_df["mibq"]
 
-        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['mibq_lag'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['cheq_lag'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.shift(4))
+        fund_df['ivaoq_lag'] = fund_df.groupby('gvkey')['ivaoq'].transform(lambda x: x.fillna(0).shift(4))
+        fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
+        fund_df['dlttq_lag'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.shift(4))
+        fund_df['dlcq_lag'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.shift(4))
+        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4))
+        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4))
+        fund_df['mibq_lag'] = fund_df.groupby('gvkey')['mibq'].transform(lambda x: x.shift(4))
 
         # Calculate net operating assets
         fund_df["noaq"] = (fund_df["atq_ltm"] - fund_df["cheq_ltm"] - fund_df["ivaoq_ltm"]) - (fund_df["atq_ltm"] - fund_df["dlttq_ltm"] - fund_df["dlcq_ltm"] - fund_df["ceqq_ltm"] - fund_df["pstkq_ltm"] - fund_df["mibq_ltm"])
@@ -596,16 +599,16 @@ def operating_profits_to_equity(db, annual=False, verbose=False, name='f_ope'):
         fund_df = get_fundq(db, fund_list=["saleq", "cogsq", "xsgaq", "xintq", "ceqq", "txditcq", "pstkq"]) # sale: sales, cogs: cost of goods sold, xsga: general and administrative expenses, xint: interest expense, ceq: common equity, txditc: deferred taxes and investment tax credit, pstk: preferred stock
         if verbose:
             print(fund_df.query("gvkey == '001690'"))
-
+        print(fund_df.dropna())
         # Get current and lagged values
         fund_df['saleq_ltm'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(4).sum())
         fund_df['cogsq_ltm'] = fund_df.groupby('gvkey')['cogsq'].transform(lambda x: x.rolling(4).sum())
         fund_df['xsgaq_ltm'] = fund_df.groupby('gvkey')['xsgaq'].transform(lambda x: x.rolling(4).sum())
         fund_df['xintq_ltm'] = fund_df.groupby('gvkey')['xintq'].transform(lambda x: x.rolling(4).sum())
         
-        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['txditcq_lag'] = fund_df.groupby('gvkey')['txditcq'].transform(lambda x: x.shift(4).rolling(4).mean())
-        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4).rolling(4).mean())
+        fund_df['ceqq_lag'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.shift(4))
+        fund_df['txditcq_lag'] = fund_df.groupby('gvkey')['txditcq'].transform(lambda x: x.shift(4))
+        fund_df['pstkq_lag'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.shift(4))
 
         # Calculate operating profits to equity
         fund_df[name] = (fund_df['saleq_ltm'] - fund_df['cogsq_ltm'] - fund_df['xsgaq_ltm'] - fund_df['xintq_ltm']) / (fund_df['ceqq_lag'] + fund_df['txditcq_lag'] - fund_df['pstkq_lag'])
@@ -630,10 +633,10 @@ def book_leverage(db, annual=False, verbose=False, name='f_bl'):
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current values
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ceqq_ltm'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['txditcq_ltm'] = fund_df.groupby('gvkey')['txditcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['pstkq_ltm'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['ceqq_ltm'] = fund_df["ceqq"]
+        fund_df['txditcq_ltm'] = fund_df["txditcq"]
+        fund_df['pstkq_ltm'] = fund_df["pstkq"]
         
         # Calculate book leverage
         fund_df[name] = fund_df["atq_ltm"] / (fund_df["ceqq_ltm"] + fund_df["txditcq_ltm"] - fund_df["pstkq_ltm"])
@@ -645,25 +648,28 @@ def book_leverage(db, annual=False, verbose=False, name='f_bl'):
 
 def financial_constraints(db, annual=False, verbose=False, name='f_fc'):
     if not annual:
-        fund_df = get_fundq(db, fund_list=["ibq", "dpq", "ppentq", "atq", "ceqq", "txdbq", "dlttq", "dlcq", "seqq", "dvcq", "dvpq", "cheq"]) # ib: income before extraordinary items, dp: depreciation and amorization, ppent: property, plant, and equipment, at: total assets, ceq: common equity, txdb: deferred taxes, dltt: long-term debt, dlc: debt in current liabilities, seq: stockholder equity, dvc: common dividends, dvp: preferred dividends, che: cash and short-term investments
+        fund_df = get_fundq(db, fund_list=["ibq", "dpq", "ppentq", "atq", "ceqq", "txdbq", "dlttq", "dlcq", "seqq", "dvpsxq", "cshoq", "dvpq", "cheq"]) # ib: income before extraordinary items, prstkc: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, dp: depreciation and amorization, ppent: property, plant, and equipment, at: total assets, ceq: common equity, txdb: deferred taxes, dltt: long-term debt, dlc: debt in current liabilities, seq: stockholder equity, dvc: common dividends, dvp: preferred dividends, che: cash and short-term investments
         if verbose:
             print(fund_df.query("gvkey == '001690'"))
+
+        # Declared dividends is not available on quarterly basis. Therefore, we construct an approximation
+        fund_df["dvcq"] = fund_df["dvpsxq"] * fund_df["cshoq"]
 
         # Get current values
         fund_df['ibq_ltm'] = fund_df.groupby('gvkey')['ibq'].transform(lambda x: x.rolling(4).sum())
         fund_df['dpq_ltm'] = fund_df.groupby('gvkey')['dpq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ceqq_ltm'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['txdbq_ltm'] = fund_df.groupby('gvkey')['txdbq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlttq_ltm'] = fund_df.groupby('gvkey')['dlttq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['dlcq_ltm'] = fund_df.groupby('gvkey')['dlcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['seqq_ltm'] = fund_df.groupby('gvkey')['seqq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['ceqq_ltm'] = fund_df["ceqq"]
+        fund_df['txdbq_ltm'] = fund_df["txdbq"]
+        fund_df['dlttq_ltm'] = fund_df["dlttq"]
+        fund_df['dlcq_ltm'] = fund_df["dlcq"]
+        fund_df['seqq_ltm'] = fund_df["seqq"]
         fund_df['dvcq_ltm'] = fund_df.groupby('gvkey')['dvcq'].transform(lambda x: x.rolling(4).sum())
         fund_df['dvpq_ltm'] = fund_df.groupby('gvkey')['dvpq'].transform(lambda x: x.rolling(4).sum())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['cheq_ltm'] = fund_df["cheq"]
 
         # Get lagged value    
-        fund_df['ppentq_lag'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.shift(4).rolling(4).mean())     
+        fund_df['ppentq_lag'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.shift(4))     
 
         # Load market cap
         marketcap_df = marketcap_calculator(db)
@@ -705,10 +711,10 @@ def book_scaled_asset_liquidity(db, annual=False, verbose=False, name='f_bsal'):
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current values
-        fund_df['actq_ltm'] = fund_df.groupby('gvkey')['actq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ppentq_ltm'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['actq_ltm'] = fund_df["actq"]
+        fund_df['ppentq_ltm'] = fund_df["ppentq"]
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['cheq_ltm'] = fund_df["cheq"]
 
         # Calculate book-scaled asset liquidity
         fund_df[name] = -(fund_df["cheq_ltm"]/fund_df["atq_ltm"] + 0.75*(fund_df["actq_ltm"] - fund_df["cheq_ltm"])/fund_df["atq_ltm"] + 0.5*fund_df["ppentq_ltm"]/fund_df["atq_ltm"])
@@ -725,13 +731,13 @@ def market_scaled_asset_liquidity(db, annual=False, verbose=False, name='f_msal'
             print(fund_df.query("gvkey == '001690'"))
 
         # Get current values
-        fund_df['actq_ltm'] = fund_df.groupby('gvkey')['actq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ppentq_ltm'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['atq_ltm'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['cheq_ltm'] = fund_df.groupby('gvkey')['cheq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['ceqq_ltm'] = fund_df.groupby('gvkey')['ceqq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['txditcq_ltm'] = fund_df.groupby('gvkey')['txditcq'].transform(lambda x: x.rolling(4).mean())
-        fund_df['pstkq_ltm'] = fund_df.groupby('gvkey')['pstkq'].transform(lambda x: x.rolling(4).mean())
+        fund_df['actq_ltm'] = fund_df["actq"]
+        fund_df['ppentq_ltm'] = fund_df["ppentq"]
+        fund_df['atq_ltm'] = fund_df["atq"]
+        fund_df['cheq_ltm'] = fund_df["cheq"]
+        fund_df['ceqq_ltm'] = fund_df["ceqq"]
+        fund_df['txditcq_ltm'] = fund_df["txditcq"]
+        fund_df['pstkq_ltm'] = fund_df["pstkq"]
 
         marketcap_df = marketcap_calculator(db)
 
