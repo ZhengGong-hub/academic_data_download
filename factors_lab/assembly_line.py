@@ -132,7 +132,7 @@ class FactorComputer():
                 save_file(mkt_cap, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
-    def earnings_to_price(self, qtr=True, name='f_sp'):
+    def earnings_to_price(self, qtr=True, name='f_ep'):
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -446,7 +446,6 @@ class FactorComputer():
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
-
     def investment_growth(self, qtr=True, name='f_ig'):
         """
         Investment growth:
@@ -592,7 +591,7 @@ class FactorComputer():
             # Fill forward for LTM values
             ltm_cols = ["atq", "cheq", "ivaoq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]
             for col in ltm_cols:
-                fund_df[f'{col}_ltm'] = fund_df[col].fillna(method='ffill') # the rest are bs terms
+                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill')) # the rest are bs terms
 
             # Lagged values (4 quarters back)
             for col in ltm_cols:
@@ -635,8 +634,6 @@ class FactorComputer():
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
 
-
-
     def asset_turnover(self, qtr=True, name='f_at'):
         """
         Asset turnover:
@@ -670,7 +667,6 @@ class FactorComputer():
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
-
 
     def operating_profits_to_equity(self, qtr=True, name='f_ope'):
         """
@@ -739,7 +735,7 @@ class FactorComputer():
                 fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.rolling(4).sum())
             # Forward-fill for balance sheet items
             for col in ['atq', 'ceqq', 'txdbq', 'dlttq', 'dlcq', 'seqq', 'cheq']:
-                fund_df[f'{col}_ltm'] = fund_df[col].fillna(method='ffill')
+                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
 
             # Get lagged value    
             fund_df['ppentq_lag'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.shift(4))     
@@ -782,7 +778,7 @@ class FactorComputer():
             
             # Get current values
             for col in ['actq', 'ppentq', 'atq', 'cheq']:
-                fund_df[f'{col}_ltm'] = fund_df[col].ffill()
+                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
 
             # Calculate book-scaled asset liquidity
             fund_df[name] = -(fund_df["cheq_ltm"]/fund_df["atq_ltm"] + 0.75*(fund_df["actq_ltm"] - fund_df["cheq_ltm"])/fund_df["atq_ltm"] + 0.5*fund_df["ppentq_ltm"]/fund_df["atq_ltm"])
@@ -805,7 +801,7 @@ class FactorComputer():
             
             # Get current values
             for col in ["actq", "ppentq", "atq", "cheq", "ceqq", "txditcq", "pstkq"]:
-                fund_df[f"{col}_ltm"] = fund_df[col].ffill()
+                fund_df[f"{col}_ltm"] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
 
             # Get market cap
             price_df = marketcap_calculator(self.db, self.gvkey_list)
