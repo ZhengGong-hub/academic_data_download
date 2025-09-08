@@ -30,7 +30,10 @@ def get_fundq(db, fund_list, verbose=False, gvkey_list=None, start_year=2000):
     if verbose: 
         print(fund_list_sql)
     # this is a sample gvkey_list: ['001690', '002176']
-    gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
+    if gvkey_list is not None:
+        gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
+    else:
+        gvkey_list_sql = ""
     if verbose:
         print(gvkey_list_sql)
     sql = f"""
@@ -57,12 +60,13 @@ def get_fundq(db, fund_list, verbose=False, gvkey_list=None, start_year=2000):
     df = db.raw_sql(sql)
     df['datadate'] = pd.to_datetime(df['datadate'])
     df['rdq'] = pd.to_datetime(df['rdq'])
+
     # the fund list value should have precision of 2
     for col in fund_list:
         df[col] = df[col].astype(float).round(2)
     return df
 
-def get_funda(db, fund_list, start_year=2000):
+def get_funda(db, fund_list, start_year=2000, gvkey_list=None, verbose=False):
     """
     Get annual fundamental data from Compustat FUNDA.
 
@@ -73,14 +77,22 @@ def get_funda(db, fund_list, start_year=2000):
         Columns to retrieve (e.g., ['sale', 'cogs', 'at']).
     start_year : int, optional
         Earliest fiscal year (default 2000).
-
+    gvkey_list : list of str, optional
+    verbose : bool, optional
+        Whether to print the SQL query.
     Returns
     -------
     pandas.DataFrame
         Annual data with requested columns.
     """
     fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
-    print(fund_list_sql)
+    # this is a sample gvkey_list: ['001690', '002176']
+    if gvkey_list is not None:
+        gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
+    else:
+        gvkey_list_sql = ""
+    if verbose:
+        print(gvkey_list_sql)
     sql = f"""
         SELECT
             f.gvkey,
@@ -95,12 +107,12 @@ def get_funda(db, fund_list, start_year=2000):
         AND f.curncd = 'USD' -- US dollars as native currency of reporting only
         AND f.fyear >= {start_year}
         AND f.datadate IS NOT NULL
+        {gvkey_list_sql}
         ORDER BY f.datadate ASC
     """
 
     df = db.raw_sql(sql)
     df['datadate'] = pd.to_datetime(df['datadate'])
-    df['rdq'] = pd.to_datetime(df['rdq'])
     # the fund list value should have precision of 2
     for col in fund_list:
         df[col] = df[col].astype(float).round(2)
