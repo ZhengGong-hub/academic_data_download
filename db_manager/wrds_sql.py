@@ -64,6 +64,10 @@ def get_fundq(db, fund_list, verbose=False, gvkey_list=None, start_year=2000):
     # the fund list value should have precision of 2
     for col in fund_list:
         df[col] = df[col].astype(float).round(2)
+
+    if verbose:
+        print("peeks at the data right after getting from wrds")
+        sneak_peek(df)
     return df
 
 def get_funda(db, fund_list, start_year=2000, gvkey_list=None, verbose=False):
