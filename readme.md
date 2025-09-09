@@ -15,3 +15,8 @@ Q: chunks in the interim?
 
 Q: what should we do when we have 2 permco -> 1 gvkey? at a given date 
 A: no. never happen after we control for link-table's valid linkdt and linkenddt
+
+
+note:
+
+book equity -> fund_df['be'] = fund_df['seqq'] + fund_df['txditcq'] - fund_df['pstkq']

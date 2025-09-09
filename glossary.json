@@ -1,4 +1,8 @@
 {
     "f_gpta": "Gross Profit to Assets",
-    "f_sp": "Sales to Price"
+    "f_sp": "Sales to Price",
+    "f_btm": "Book-to-Market",
+    "f_dtm": "Debt to Market",
+    "f_ep": "Earnings to Price",
+    "f_cfp": "Cashflow to Price"
 }

@@ -34,8 +34,11 @@ class FactorComputer():
         else:
             raise ValueError("qtr var error!")
 
-        if self.verbose: print("peeks at the data after calculation!\n"); sneak_peek(fund_df)
-        if self.gvkey_list is None: save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        if self.verbose: 
+            print("peeks at the data after calculation!\n")
+            sneak_peek(fund_df)
+        if self.gvkey_list is None: 
+            save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
     def sales_to_price(self, qtr=True, name='f_sp'):
@@ -68,6 +71,7 @@ class FactorComputer():
         """
         BE = SEQQ + TXDITC - PSTK (book equity)
         BTM = BE / Market Cap
+        Rosenberg et al. (1985)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -89,7 +93,6 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap_df)
-
             if self.gvkey_list is None:
                 save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
@@ -117,7 +120,6 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap_df)
-            
             if self.gvkey_list is None:
                 save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
@@ -130,8 +132,7 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq"]) # ibq: income before taxes
-
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq"]) # ibq: Income Before Extraordinary Items
             fund_df['ibq_ltm'] = rolling_sum(fund_df, 'ibq')
 
             mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
@@ -141,7 +142,6 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap_df)
-
             if self.gvkey_list is None:
                 save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
@@ -150,16 +150,16 @@ class FactorComputer():
         """
         Cashflow to price:
         Cashflow / Market Cap
-        Cashflow = Income Before Taxes + Depreciation and Amortization
+        Cashflow = Income Before Extraordinary Items + Depreciation and Amortization
         Lakonishok et al. (1994)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # ibq: income before taxes, dpq: depreciation and amortization
+            # ibq: income before extraordinary items, dpq: depreciation and amortization
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq", "dpq"]) 
 
-            fund_df['ibq'] = fillna_with_0(fund_df, 'ibq')
+            fund_df['dpq'] = fillna_with_0(fund_df, 'dpq')
             fund_df['cashflow'] = fund_df['ibq'] + fund_df['dpq']
             fund_df['cashflow_ltm'] = rolling_sum(fund_df, 'cashflow')
 
@@ -170,11 +170,10 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap_df)
-
             if self.gvkey_list is None:
                 save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
-
+# -------------------------------- # 
     # TODO: need to fix this
     def payout_yield(self, qtr=True, name='f_py'):
         if not check_if_calculation_needed(name, self.gvkey_list):
@@ -352,8 +351,9 @@ class FactorComputer():
 
     def abnormal_capital_investment(self, qtr=True, name='f_aci'):
         """
-        Abnormal capital investment: defined by Titman et al. (2004)
-        Description: xxxxxxxxx
+        Abnormal capital investment: 
+        Current capital expenditure relative to historical capital expenditure
+        See Titman et al. (2004)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -387,8 +387,9 @@ class FactorComputer():
 
     def investment_to_assets(self, qtr=True, name='f_ita'):
         """
-        Investment to assets: Cooper et al. (2008)
-        Growth of total assets
+        Investment to assets: 
+        Growth rate of total assets
+        See Cooper et al. (2008)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -436,8 +437,9 @@ class FactorComputer():
 
     def investment_growth(self, qtr=True, name='f_ig'):
         """
-        Investment growth:
+        Investment growth: 
         Growth of capital expenditure
+        See Xing (2008)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -462,8 +464,9 @@ class FactorComputer():
 
     def inventory_changes(self, qtr=True, name='f_ic'):
         """
-        Inventory changes:
+        Inventory changes: 
         Change in inventory, scaled by assets
+        See Thomas & Zhang (2002)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -491,8 +494,47 @@ class FactorComputer():
     def operating_accruals(self, qtr=True, name='f_oa'):
         """
         Operating accruals:
-        description:
-        from paper:
+        Non-cash component of earnings arising from changes in current assets, current liabilities, and depreciation and amortization. Financing transactions and income taxes payable are excluded
+        See Sloan (1996)
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:
+            _to_retrieve = ["actq", "atq", "cheq", "lctq", "dlcq", "txpq", "dpq"]
+            # actq: current assets, atq: total assets, cheq: cash and cash equivalents, lctq: current liabilities, dlcq: short-term debt, txpq: income taxes payable, dpq: depreciation and amortization
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=_to_retrieve) 
+
+            # Get lagged values (4 quarters ago)
+            lag_cols = _to_retrieve
+            for col in lag_cols:
+                fund_df[col] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
+                fund_df[f"{col}_lag"] = fund_df.groupby('gvkey')[col].shift(4)
+
+            # Calculate deltas
+            delta_ca = fund_df["actq"] - fund_df["actq_lag"]
+            delta_cash = fund_df["cheq"] - fund_df["cheq_lag"]
+            delta_cl = fund_df["lctq"] - fund_df["lctq_lag"]
+            delta_std = fund_df["dlcq"] - fund_df["dlcq_lag"]
+            delta_tp = fund_df["txpq"] - fund_df["txpq_lag"]
+
+            # Calculate operating accruals
+            denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
+            fund_df[name] = ((delta_ca - delta_cash) - (delta_cl - delta_std - delta_tp) - fund_df["dpq"]) / denom
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(fund_df)
+
+            if self.gvkey_list is None:
+                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}' 
+
+
+    def total_accruals(self, qtr=True, name='f_ta'):
+        """
+        Total accruals: 
+        Sum of the change in working capital, non-current operating assets, and financial assets. Then scaled by total assets
+        See Richardson et al. (2005)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -515,7 +557,7 @@ class FactorComputer():
             delta_finaq = (fund_df['ivstq'] + fund_df['ivaoq']) - (fund_df['ivstq_lag'] + fund_df['ivaoq_lag'])
             delta_finlq = (fund_df['dlttq'] + fund_df['dlcq'] + fund_df['pstkq']) - (fund_df['dlttq_lag'] + fund_df['dlcq_lag'] + fund_df['pstkq_lag'])
 
-            # Calculate operating accruals
+            # Calculate total accruals
             denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
             fund_df[name] = ((delta_coaq - delta_colq) + (delta_ncoaq - delta_ncolq) + (delta_finaq - delta_finlq)) / denom
 
@@ -536,26 +578,31 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # sstky: sale of common and preferred stocks, atq: total assets, prstkcy: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltisy: cash inflow issuance long-term debt, dltry: cash outflow reduction long-term debt, dlcchy: change in current debt
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["sstky", "atq", "prstkcy", "dvpsxq", "cshoq", "dltisy", "dltry", "dlcchy"]) 
-            
+            # sstky: sale of common and preferred stocks, atq: total assets, prstkc: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltisy: cash inflow issuance long-term debt, dltry: cash outflow reduction long-term debt, dlcchy: change in current debt
+            fund_df_quarter = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["sstky", "atq", "dvpsxq", "cshoq", "dltisy", "dltry", "dlcchy"])
+            fund_df_annual = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["prstkc"]) 
+
+            # Merge both data frames
+            fund_df = pd.merge_asof(fund_df_quarter, fund_df_annual, left_on=['datadate'], right_on=['datadate'], by=['gvkey'], direction='backward')
+
             # Declared dividends is not available on quarterly basis. Therefore, we construct an approximation
             fund_df["dvcq"] = fund_df["dvpsxq"] * fund_df["cshoq"]
 
             # Get current and lagged values
-            ltm_cols = ['sstky', 'prstkcy', 'dvcq', 'dltisy', 'dltry', 'dlcchy']
+            ltm_cols = ['sstky', 'dvcq', 'dltisy', 'dltry', 'dlcchy']
             for col in ltm_cols:
                 fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.rolling(4).sum())
                 fund_df[f'{col}_lag'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.shift(4).rolling(4).sum())
             fund_df['atq'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.fillna(method='ffill'))
             fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
-
+            fund_df['prstkc_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
+            
             # Calculate deltas
-            fund_df['delta_equityq'] = (fund_df['sstky_ltm'] - fund_df['prstkcy_ltm'] - fund_df['dvcq_ltm']) - (fund_df['sstky_lag'] - fund_df['prstkcy_lag'] - fund_df['dvcq_lag'])
+            fund_df['delta_equityq'] = (fund_df['sstky_ltm'] - fund_df['prstkc'] - fund_df['dvcq_ltm']) - (fund_df['sstky_lag'] - fund_df['prstkc_lag'] - fund_df['dvcq_lag'])
             fund_df['delta_debtq'] = (fund_df['dltisy_ltm'] - fund_df['dltry_ltm'] - fund_df['dlcchy_ltm']) - (fund_df['dltisy_lag'] - fund_df['dltry_lag'] - fund_df['dlcchy_lag'])
 
             # Calculate net external finance
-            fund_df[name] = (fund_df['delta_equityq'] + fund_df['delta_debtq']) / (0.5*fund_df["atq_ltm"] + 0.5*fund_df["atq_lag"])
+            fund_df[name] = (fund_df['delta_equityq'] + fund_df['delta_debtq']) / (0.5*fund_df["atq"] + 0.5*fund_df["atq_lag"])
 
             if self.verbose:
                 print("peeks at the data after calculation!")
@@ -567,6 +614,11 @@ class FactorComputer():
     
 
     def return_net_operating_assets(self, qtr=True, name='f_rnoa'):
+        """
+        Return on net operating assets:
+        Operating income / average net operating assets
+        See Soliman (2008)
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -602,6 +654,11 @@ class FactorComputer():
     
     
     def profit_margin(self, qtr=True, name='f_pm'):
+        """
+        Profit margin:
+        Operating income / Sales
+        See Soliman (2008)
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -625,7 +682,8 @@ class FactorComputer():
     def asset_turnover(self, qtr=True, name='f_at'):
         """
         Asset turnover:
-        Sales / Net Operating Assets
+        Sales / Average Net Operating Assets
+        See Soliman (2008)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -659,7 +717,7 @@ class FactorComputer():
     def operating_profits_to_equity(self, qtr=True, name='f_ope'):
         """
         Operating profits to equity:
-        (Operating Income - Interest Expense) / (Common Equity + Deferred Taxes and Investment Tax Credit - Preferred Stock)
+        (Operating Income - Interest Expense) / Book equity, where Book equity is defined as Common Equity + Deferred Taxes and Investment Tax Credit - Preferred Stock
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
@@ -689,6 +747,10 @@ class FactorComputer():
 
 
     def book_leverage(self, qtr=True, name='f_bl'):
+        """
+        Book leverage:
+        Total assets / Book equity, where Book equity is defined as Common Equity + Deferred Taxes and Investment Tax Credit - Preferred Stock
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -708,6 +770,11 @@ class FactorComputer():
         
 
     def financial_constraints(self, qtr=True, name='f_fc'):
+        """
+        Financial constraints:
+        Kaplan-Zingales index: (Cash flow / capital) + Tobins`s Q + leverage - (dividends / capital) - (cash / capital)
+        See Lamont et al. (2001) for exact formula and coefficients in front of variables
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -758,6 +825,11 @@ class FactorComputer():
         
 
     def book_scaled_asset_liquidity(self, qtr=True, name='f_bsal'):
+        """
+        Book-scaled asset liquidity:
+        Sum of asset items scaled by total assets. Each asset item gets a coefficient based on its liquidity
+        See Ortiz-Molina & Phillips (2014) for exact formula and coefficients in front of variables
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -781,6 +853,11 @@ class FactorComputer():
 
 
     def market_scaled_asset_liquidity(self, qtr=True, name='f_msal'):
+        """
+        Market-scaled asset liquidity:
+        Sum of asset items scaled by market assets. Each asset item gets a coefficient based on its liquidity
+        See Ortiz-Molina & Phillips (2014) for exact formula and coefficients in front of variables
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
@@ -814,6 +891,10 @@ class FactorComputer():
 
 
     def dividend_yield(self, qtr=True, name='f_dy'):
+        """
+        Dividend yield:
+        Dividends paid / Price
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
