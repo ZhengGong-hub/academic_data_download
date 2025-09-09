@@ -25,7 +25,7 @@ FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
 
 # FactorComputer.btm(qtr=True, name='f_btm')
 
-# FactorComputer.debt_to_equity(qtr=True, name='f_dte')
+# FactorComputer.debt_to_market(qtr=True, name='f_dtm')
 
 # FactorComputer.earnings_to_price(qtr=True, name='f_ep')
 
