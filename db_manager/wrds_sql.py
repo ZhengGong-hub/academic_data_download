@@ -3,7 +3,7 @@ import pandas as pd
 import tqdm
 import numpy as np
 import glob
-from utils.merger import merge_link_table_crsp
+from utils.merger import merge_link_table_crsp, merge_link_table_msp500list
 from utils.clean import crsp_clean
 from utils.sneak_peek import sneak_peek
 
@@ -269,3 +269,104 @@ def marketcap_calculator(db, gvkey_list=None, verbose=False):
     if verbose:
         sneak_peek(crsp_df)
     return crsp_df
+
+
+def get_sp500_constituents(db):
+    """
+    Get SP500 list from CRSP. with link table and gic sector.
+    """
+    sql = """
+    SELECT a.*
+    , link_df.gvkey
+    , link_df.linkdt
+    , link_df.linkenddt
+    , gic_sector_df.gsector
+    , gic_sector_df.indfrom
+    , gic_sector_df.indthru
+
+    FROM crsp.msp500list AS a
+
+    JOIN (
+        SELECT gvkey,
+            liid,
+            linkdt,
+            COALESCE(linkenddt, '2059-12-31') AS linkenddt,
+            lpermno as permno,
+            lpermco as permco,
+            linkprim
+        FROM crsp.ccmxpf_linktable
+        WHERE linktype IN ('LU', 'LC')         -- standard links
+        AND linkprim IN ('P', 'J', 'C')      -- primary links
+        AND lpermno IS NOT NULL
+    ) AS link_df
+    ON a.permno = link_df.permno
+
+    JOIN (
+        select co_hgic.gsector
+        , co_hgic.gvkey
+        , co_hgic.indfrom
+        , COALESCE(co_hgic.indthru, '2059-12-31') AS indthru
+        from comp.co_hgic as co_hgic
+        where indtype = 'GICS'
+    ) AS gic_sector_df
+    ON link_df.gvkey = gic_sector_df.gvkey
+
+    WHERE 
+    ending < linkenddt + INTERVAL '1 year';
+    """
+    return db.raw_sql(sql)
+
+
+def get_sp500_constituents_snapshot(db, year):
+    """
+    Get SP500 list from CRSP. with link table and gic sector. at a given year.
+    """
+    sql = f"""
+    SELECT a.*
+    , link_df.gvkey
+    , link_df.linkdt
+    , link_df.linkenddt
+    , gic_sector_df.gsector
+    , gic_sector_df.indfrom
+    , gic_sector_df.indthru
+
+    FROM crsp.msp500list AS a
+
+    JOIN (
+        SELECT gvkey,
+            liid,
+            linkdt,
+            COALESCE(linkenddt, '2059-12-31') AS linkenddt,
+            lpermno as permno,
+            lpermco as permco,
+            linkprim
+        FROM crsp.ccmxpf_linktable
+        WHERE linktype IN ('LU', 'LC')         -- standard links
+        AND linkprim IN ('P', 'J', 'C')      -- primary links
+        AND lpermno IS NOT NULL
+    ) AS link_df
+    ON a.permno = link_df.permno
+
+    JOIN (
+        select co_hgic.gsector
+        , co_hgic.gvkey
+        , co_hgic.indfrom
+        , COALESCE(co_hgic.indthru, '2059-12-31') AS indthru
+        from comp.co_hgic as co_hgic
+        where indtype = 'GICS'
+    ) AS gic_sector_df
+    ON link_df.gvkey = gic_sector_df.gvkey
+
+    WHERE 
+    ending < linkenddt + INTERVAL '1 year'
+    AND
+    ending > '{year}-01-01'
+    AND 
+    start <= '{year}-01-01'
+    AND 
+    '{year}-01-01' >= indfrom
+    AND
+    '{year}-01-01' < indthru
+    ;
+    """
+    return db.raw_sql(sql)

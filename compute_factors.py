@@ -15,13 +15,13 @@ db = connect_wrds(username=os.getenv("WRDS_USERNAME"), password=os.getenv("WRDS_
 gvkey_list = ['001690', 
     '002176'
     ] # berkshire and apple
-gvkey_list = None
+# gvkey_list = None
 
 FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
 
-# FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
+FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 
-# FactorComputer.sales_to_price(qtr=True, name='f_sp')
+FactorComputer.sales_to_price(qtr=True, name='f_sp')
 
 # FactorComputer.btm(qtr=True, name='f_btm')
 
@@ -39,7 +39,7 @@ FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
 
 # FactorComputer.rd_to_marketcap(qtr=True, name='f_rdp')
 
-FactorComputer.operating_leverage(qtr=True, name='f_ol')
+# FactorComputer.operating_leverage(qtr=True, name='f_ol')
 
 # compute factors
 
