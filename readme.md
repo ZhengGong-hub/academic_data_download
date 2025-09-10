@@ -20,3 +20,8 @@ A: no. never happen after we control for link-table's valid linkdt and linkenddt
 note:
 
 book equity -> fund_df['be'] = fund_df['seqq'] + fund_df['txditcq'] - fund_df['pstkq']
+
+note:
+for i/s, c/f term, we do rolling sum (pay attention to whether we want to fillna or not)
+for b/s term, we use either the t, or the mean of t and t-1 (pay attention to whether we want to fillna or not)
+for b/s term, we can fill forward 
