@@ -12,5 +12,13 @@ def fillna_with_0(df, col):
     return df[col].fillna(0)
 
 
+def shift_n_rows(df, col, row):
+    return df.groupby('gvkey')[col].transform(lambda x: x.shift(row))
+
+
 def merge_mktcap_fundq(mktcap_df, fund_df):
     return pd.merge_asof(mktcap_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
+
+
+def merge_funda_rdq(funda_df, fundq_df):
+    return pd.merge(funda_df, fundq_df, on=['gvkey', 'datadate'], how='left').drop_duplicates(subset=['gvkey', 'datadate'])

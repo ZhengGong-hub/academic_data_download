@@ -1,10 +1,11 @@
 import pandas as pd
+import numpy as np
 
 from db_manager.wrds_sql import get_fundq, get_funda, marketcap_calculator, get_crsp_daily
 from utils.save_file import save_file
 from utils.necessary_cond_calculation import check_if_calculation_needed
 from utils.sneak_peek import sneak_peek
-from utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0
+from utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows
 
 class FactorComputer():
     def __init__(self, verbose, db, gvkey_list):
@@ -173,63 +174,63 @@ class FactorComputer():
             if self.gvkey_list is None:
                 save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
-# -------------------------------- # 
-    # TODO: need to fix this
+
     def payout_yield(self, qtr=True, name='f_py'):
+        """
+        Payout yield:
+        Payout / Market Cap
+        Payout = Cash Dividends + Repurchased Shares * Price to Book Ratio (not the net repurchase)
+        Boudoukh et al. (2007) 
+        """
+
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["dvy", "dvpsxq", "cshoq"]) # ibq: income before taxes
-            if self.verbose:
-                print("peeks at the data right after getting from wrds")
-                sneak_peek(fund_df)
+            # dvpsxq: cash dividends paid per share, cshoq: common shares outstanding, cshopq: common shares outstanding repurchased, prcraq: price to book ratio
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["dvpsxq", "cshoq", "cshopq", "prcraq"])
 
+            fund_df['dvpsxq'] = fillna_with_0(fund_df, 'dvpsxq')
+            fund_df['cshopq'] = fillna_with_0(fund_df, 'cshopq')
+            fund_df['prcraq'] = fillna_with_0(fund_df, 'prcraq')
+            fund_df['cshoq'] = fillna_with_0(fund_df, 'cshoq')
 
-            price_df = get_crsp_daily(self.db)
-            print(price_df)
-            print(price_df.query("gvkey == '001690'"))
-            assert False
-            fund_df['cashflow'] = fund_df['ibq'].fillna(0) + fund_df['dpq'].fillna(0)
-            fund_df['cashflow_ltm'] = round(fund_df.groupby('gvkey')['cashflow'].transform(lambda x: x.rolling(window=4).sum()), 2)
+            fund_df['payout'] = fund_df['dvpsxq'] * fund_df['cshoq'] + fund_df['cshopq'] * fund_df['prcraq']
+            fund_df['payout_ltm'] = rolling_sum(fund_df, 'payout')
 
-            price_df = marketcap_calculator(self.db, self.gvkey_list)
-
-            # merge the fund_df and price_df
-            price_df = pd.merge_asof(price_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
-            price_df[name] = price_df['cashflow_ltm'] / price_df['marketcap']
+            # get market cap
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+            mktcap_df[name] = mktcap_df['payout_ltm'] / mktcap_df['marketcap']
 
             if self.verbose:
                 print("peeks at the data after calculation!")
-                sneak_peek(price_df)
-
+                sneak_peek(mktcap_df)
             if self.gvkey_list is None:
-                save_file(price_df, name) # only save the file if gvkey_list is None (meaning select all)
+                save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
     def ev_multiple(self, qtr=True, name='f_evm'):
+        """
+        Enterprise Value to EBITDA
+        Enterprise Value = Market Cap + Long Term Debt + Total Current Debt + Noncontrolling Intrest - Cash and Equivalents + Preferred Stock
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["dlttq", "dlcq", "mibtq", "cheq", "pstkq", "oibdpq"]) # dlttq: long term debt, dlcq: total current debt, mibtq: noncontrolling intrest, cheq: cash and equivalents, pstkq: preferred stock
+            # dlttq: long term debt, dlcq: total current debt, mibtq: noncontrolling intrest, cheq: cash and equivalents, pstkq: preferred stock
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["dlttq", "dlcq", "mibtq", "cheq", "pstkq", "oibdpq"]) 
 
-            # fillna with 0
-            fund_df['dlttq'] = fund_df['dlttq'].fillna(0)
-            fund_df['dlcq'] = fund_df['dlcq'].fillna(0)
-            fund_df['mibtq'] = fund_df['mibtq'].fillna(0)
-            fund_df['cheq'] = fund_df['cheq'].fillna(0)
-            fund_df['pstkq'] = fund_df['pstkq'].fillna(0)
-            fund_df['oibdpq'] = fund_df['oibdpq'].fillna(0)
+            fund_df['dlttq'] = fillna_with_0(fund_df, 'dlttq')
+            fund_df['dlcq'] = fillna_with_0(fund_df, 'dlcq')
+            fund_df['mibtq'] = fillna_with_0(fund_df, 'mibtq')
+            fund_df['cheq'] = fillna_with_0(fund_df, 'cheq')
+            fund_df['pstkq'] = fillna_with_0(fund_df, 'pstkq')
+            fund_df['oibdpq'] = fillna_with_0(fund_df, 'oibdpq')
 
-            fund_df['ebitda_ltm'] = round(fund_df.groupby('gvkey')['oibdpq'].transform(lambda x: x.rolling(window=4).sum()), 2)
-
-            if self.verbose:
-                print("peeks at the data right after getting from wrds")
-                sneak_peek(fund_df)
+            fund_df['ebitda_ltm'] = rolling_sum(fund_df, 'oibdpq')
 
             mktcap = marketcap_calculator(self.db, self.gvkey_list)
-
-            # merge the fund_df and mktcap
-            mktcap = pd.merge_asof(mktcap, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward').dropna(subset=['rdq'])
+            mktcap = merge_mktcap_fundq(mktcap, fund_df)
 
             mktcap['ev'] = mktcap['marketcap'] + mktcap['dlttq'] + mktcap['dlcq'] + mktcap['mibtq'] - mktcap['cheq'] + mktcap['pstkq'] 
             mktcap[name] = mktcap['ev'] / mktcap['ebitda_ltm']
@@ -237,60 +238,82 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap)
-
             if self.gvkey_list is None:
                 save_file(mktcap, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
     def advertising_to_marketcap(self, qtr=True, name='f_adp'):
+        """
+        Advertising to Market Cap
+        Advertising expenses / Market Cap, only has annual term
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if not qtr:
             fund_df = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["xad"]) # adpq: advertising expenses
-        pass # TODO: need to fix this
+            _merge_on_rdq_date = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq"])[['gvkey', 'rdq', 'datadate']] # adpq: advertising expenses
+            fund_df = merge_funda_rdq(fund_df, _merge_on_rdq_date)
+            fund_df['xad'] = fillna_with_0(fund_df, 'xad')
+
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+            mktcap_df[name] = mktcap_df['xad'] / mktcap_df['marketcap']
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(mktcap_df)
+            if self.gvkey_list is None:
+                save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}'
             
     def rd_to_marketcap(self, qtr=True, name='f_rdp'):
+        """
+        Research and Development to Market Cap
+        Research and Development expenses / Market Cap
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["xrdq"]) # xrdq: research and development expenses
+            fund_df['xrdq'] = fillna_with_0(fund_df, 'xrdq')
+            fund_df['xrdq_ltm'] = rolling_sum(fund_df, 'xrdq')
 
-            if self.verbose:
-                print("peeks at the data right after getting from wrds")
-                sneak_peek(fund_df)
-            
             mktcap = marketcap_calculator(self.db, self.gvkey_list)
-
-            # merge the fund_df and mktcap
-            mktcap = pd.merge_asof(mktcap, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward').dropna(subset=['rdq'])
-            mktcap['xrdq'] = mktcap['xrdq'].fillna(0)
-
-            mktcap[name] = mktcap['xrdq'] / mktcap['marketcap']
+            mktcap = merge_mktcap_fundq(mktcap, fund_df)
+            mktcap[name] = mktcap['xrdq_ltm'] / mktcap['marketcap']
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(mktcap)
-            
             if self.gvkey_list is None:
                 save_file(mktcap, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
     def operating_leverage(self, qtr=True, name='f_ol'):
+        """
+        Operating Leverage
+        Operating leverage, defined as annual operating costs divided by assets (Compustat item AT), 
+        where operating costs is cost of goods sold (COGS) plus selling, general, and administrative expenses (XSGA).     
+        Novy-Marx, 2011
+        """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["xsgaq", "cogsq"]) # xsgaq: selling, general and administrative expenses, cogsq: cost of goods sold
+            # xsgaq: selling, general and administrative expenses, cogsq: cost of goods sold
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["xsgaq", "cogsq", "atq"]) 
 
-            fund_df['xsgaq_ltm'] = round(fund_df.groupby('gvkey')['xsgaq'].transform(lambda x: x.rolling(window=4).sum()), 2)
-            fund_df['cogsq_ltm'] = round(fund_df.groupby('gvkey')['cogsq'].transform(lambda x: x.rolling(window=4).sum()), 2)
+            fund_df['xsgaq'] = fillna_with_0(fund_df, 'xsgaq')
+            fund_df['cogsq'] = fillna_with_0(fund_df, 'cogsq')
+
+            fund_df['xsgaq_ltm'] = rolling_sum(fund_df, 'xsgaq')
+            fund_df['cogsq_ltm'] = rolling_sum(fund_df, 'cogsq')
             
             # calculate operating leverage
-            fund_df[name] = fund_df['xsgaq_ltm'] / (fund_df['xsgaq_ltm']+fund_df['cogsq_ltm'])
+            fund_df[name] = (fund_df['xsgaq_ltm'] + fund_df['cogsq_ltm']) / fund_df['atq']
             
             if self.verbose:
-                print("peeks at the data right after getting from wrds")
+                print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-            
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
@@ -305,18 +328,13 @@ class FactorComputer():
             return f'Done with {name}'
         if qtr:
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq", "atq"]) # ibq: income before extraordinary items, atq: total assets
-            
-            # group by gvkey and rolling sum of ibq for the last 4 quarters
-            fund_df['ibq_ltm'] = fund_df.groupby('gvkey')['ibq'].transform(lambda x: x.rolling(window=4).sum())
-            fund_df['atq'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.fillna(method='ffill'))
-        
-            # calculate return on assets
+
+            fund_df['ibq_ltm'] = rolling_sum(fund_df, 'ibq')
             fund_df[name] = fund_df['ibq_ltm'] / fund_df['atq']
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
@@ -333,20 +351,26 @@ class FactorComputer():
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq"])  # saleq: sales
             
             # Get lagged sale variable
-            fund_df['saleq_lag'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.shift(20).rolling(4).sum()) # by 5 years
-            fund_df['saleq_ltm'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(window=4).sum())
+            fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
+            fund_df['saleq_lag'] = shift_n_rows(fund_df, 'saleq_ltm', 20)
 
             # Calculate growth rate
             fund_df['five_year_sales_cagr'] = (fund_df['saleq_ltm'] / fund_df['saleq_lag']) ** (1/5) - 1
+            # drop na
+            fund_df = fund_df.dropna()
 
-            # TODO: from cagr to rank (CROSS SECTIONAL)
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+
+            # groupby date to assign cagr into 10 classes (1-10, deciles)
+            mktcap_df[name] = mktcap_df.groupby('date')['five_year_sales_cagr'] \
+                .transform(lambda x: pd.qcut(x.rank(method='first'), 10, labels=False, duplicates='drop') + 1)
 
             if self.verbose:
                 print("peeks at the data after calculation!")
-                sneak_peek(fund_df)
-
+                sneak_peek(mktcap_df)
             if self.gvkey_list is None:
-                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+                save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}'
 
     def abnormal_capital_investment(self, qtr=True, name='f_aci'):
