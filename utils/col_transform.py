@@ -27,5 +27,8 @@ def merge_funda_rdq(funda_df, fundq_df):
 
 
 def merge_funda_fundq(fundq_df, funda_df):
+    fundq_df.sort_values(by=['datadate', 'gvkey'], inplace=True)
+    funda_df.sort_values(by=['datadate', 'gvkey'], inplace=True)
     merged = pd.merge_asof(fundq_df, funda_df, on=['datadate'], by=['gvkey'], direction='backward')
+    merged.sort_values(by=['datadate', 'gvkey'], inplace=True)
     return merged
