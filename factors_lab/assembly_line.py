@@ -80,10 +80,9 @@ class FactorComputer():
             # seqq: Stockholders' Equity - Total, txditcc: deferred income tax, pstk: preferred stock
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["seqq", "txditcq", "pstkq"])
 
-            # fillna with 0, but not for seqq 
-            fund_df['txditcq'] = fill_forward(fund_df, 'txditcq')
-            fund_df['pstkq'] = fill_forward(fund_df, 'pstkq')
-            fund_df['seqq'] = fill_forward(fund_df, 'seqq')
+            # forward fill
+            for col in ['txditcq', 'pstkq', 'seqq']:
+                fund_df[col] = fill_forward(fund_df, col)
 
             fund_df['be'] = fund_df['seqq'] + fund_df['txditcq'] - fund_df['pstkq']
 
@@ -549,23 +548,23 @@ class FactorComputer():
     def operating_accruals(self, qtr=True, name='f_oa'):
         """
         Operating accruals:
-        Non-cash component of earnings arising from changes in current assets, current liabilities, and depreciation and amortization. Financing transactions and income taxes payable are excluded
+        Non-cash component of earnings arising from changes in current assets, current liabilities, 
+        and depreciation and amortization. 
+        Financing transactions and income taxes payable are excluded
         See Sloan (1996)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
             _to_retrieve = ["actq", "atq", "cheq", "lctq", "dlcq", "txpq", "dpq"]
-            # actq: current assets, atq: total assets, cheq: cash and cash equivalents, lctq: current liabilities, dlcq: short-term debt, txpq: income taxes payable, dpq: depreciation and amortization
+            # actq: current assets, atq: total assets, cheq: cash and cash equivalents, lctq: current liabilities, 
+            # dlcq: short-term debt, txpq: income taxes payable, dpq: depreciation and amortization
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=_to_retrieve) 
 
             # Get lagged values (4 quarters ago)
-            lag_cols = ["actq", "cheq", "lctq", "dlcq", "txpq", "dpq"]
-            for col in lag_cols:
-                fund_df[col] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
-                fund_df[f"{col}_lag"] = fund_df.groupby('gvkey')[col].shift(4)
-
-            fund_df["atq_lag"] = fund_df.groupby('gvkey')["atq"].shift(4)
+            for col in _to_retrieve:
+                fund_df[col] = fill_forward(fund_df, col)
+                fund_df[f"{col}_lag"] = shift_n_rows(fund_df, col, 4)
 
             # Calculate deltas
             delta_ca = fund_df["actq"] - fund_df["actq_lag"]
@@ -581,7 +580,6 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
@@ -590,7 +588,8 @@ class FactorComputer():
     def total_accruals(self, qtr=True, name='f_ta'):
         """
         Total accruals: 
-        Sum of the change in working capital, non-current operating assets, and financial assets. Then scaled by total assets
+        Sum of the change in working capital, non-current operating assets, and financial assets. 
+        Then scaled by total assets
         See Richardson et al. (2005)
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
@@ -601,18 +600,15 @@ class FactorComputer():
 
             fund_df_quarter = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=_to_retrieve)
             fund_df_annual = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ivao"]) 
-            print(fund_df_quarter)
-            print(fund_df_annual)
+
             # Merge both data frames
-            fund_df = pd.merge_asof(fund_df_quarter, fund_df_annual, left_on=['datadate'], right_on=['datadate'], by=['gvkey'], direction='backward')
+            fund_df = merge_funda_fundq(fund_df_quarter, fund_df_annual)
 
             # Get lagged values (4 quarters ago)
-            lag_cols = ["actq", "cheq", "lctq", "dlcq", "ltq", "dlttq", "ivstq", "pstkq", "ivao"]
+            lag_cols = _to_retrieve + ["ivao"]
             for col in lag_cols:
-                fund_df[col] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
-                fund_df[f"{col}_lag"] = fund_df.groupby('gvkey')[col].shift(4)
-
-            fund_df["atq_lag"] = fund_df.groupby('gvkey')["atq"].shift(4)
+                fund_df[col] = fill_forward(fund_df, col)
+                fund_df[f"{col}_lag"] = shift_n_rows(fund_df, col, 4)
 
             # Calculate deltas
             delta_coaq = (fund_df['actq'] - fund_df['cheq']) - (fund_df['actq_lag'] - fund_df['cheq_lag'])
@@ -629,12 +625,10 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
 
-    # TODO: check correctness of the "xxxxy" columns
     def net_external_finance(self, qtr=True, name='f_nef'):
         """
         Net external finance:
@@ -643,51 +637,45 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # sstk: sale of common and preferred stocks, atq: total assets, prstkc: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltis: cash inflow issuance long-term debt, dltr: cash outflow reduction long-term debt, dlcch: change in current debt
+            # sstk: sale of common and preferred stocks, atq: total assets, prstkc: purchase of common and preferred stocks, 
+            # dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltis: cash inflow issuance long-term debt, 
+            # dltr: cash outflow reduction long-term debt, dlcch: change in current debt
             fund_df_quarter = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["atq", "dvpsxq", "cshoq"])
             fund_df_annual = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["prstkc", "sstk", "dltis", "dltr", "dlcch"]) 
-            print(fund_df_quarter)
-            print(fund_df_annual)
+
             # Merge both data frames
-            fund_df = pd.merge_asof(fund_df_quarter, fund_df_annual, left_on=['datadate'], right_on=['datadate'], by=['gvkey'], direction='backward')
+            fund_df = merge_funda_fundq(fund_df_quarter, fund_df_annual)
 
-            # fillna with 0
-            fund_df['sstk'] = fillna_with_0(fund_df, 'sstk')
-            fund_df['dvpsxq'] = fillna_with_0(fund_df, 'dvpsxq')
-            fund_df['cshoq'] = fillna_with_0(fund_df, 'cshoq')
-            fund_df['prstkc'] = fillna_with_0(fund_df, 'prstkc')
-            fund_df['dltis'] = fillna_with_0(fund_df, 'dltis')
-            fund_df['dltr'] = fillna_with_0(fund_df, 'dltr')
-            fund_df['dlcch'] = fillna_with_0(fund_df, 'dlcch')
+            # for c/f term we fill na with 0
+            for col in ['sstk', 'dvpsxq', 'prstkc', 'dltis', 'dltr', 'dlcch']:
+                fund_df[col] = fillna_with_0(fund_df, col)
             
-            
+            # for b/s term we fill forward
+            fund_df['cshoq'] = fill_forward(fund_df, 'cshoq')
 
-            # Declared dividends is not available on quarterly basis. Therefore, we construct an approximation
+            # actual dividends paid 
             fund_df["dvcq"] = fund_df["dvpsxq"] * fund_df["cshoq"]
 
             # Get current and lagged values
             ltm_cols = ['dvcq']
             for col in ltm_cols:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.rolling(4).sum())
-                fund_df[f'{col}_lag'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.shift(4).rolling(4).sum())
-            fund_df['atq_lag'] = fund_df.groupby('gvkey')['atq'].transform(lambda x: x.shift(4))
-            fund_df['prstkc_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
-            fund_df['sstk_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
-            fund_df['dltis_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
-            fund_df['dltr_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
-            fund_df['dlcch_lag'] = fund_df.groupby('gvkey')['prstkc'].transform(lambda x: x.shift(4))
+                fund_df[f'{col}_ltm'] = rolling_sum(fund_df, col)
+                fund_df[f'{col}_lag'] = shift_n_rows(fund_df, f'{col}_ltm', 4)
+
+            # we do not rolling sum becasue they are already annual data
+            for col in ['atq', 'prstkc', 'sstk', 'dltis', 'dltr', 'dlcch']:
+                fund_df[f'{col}_lag'] = shift_n_rows(fund_df, col, 4)
             
             # Calculate deltas
-            fund_df['delta_equityq'] = (fund_df['sstk'] - fund_df['prstkc'] - fund_df['dvcq_ltm']) - (fund_df['sstk_lag'] - fund_df['prstkc_lag'] - fund_df['dvcq_lag'])
-            fund_df['delta_debtq'] = (fund_df['dltis'] - fund_df['dltr'] - fund_df['dlcch']) - (fund_df['dltis_lag'] - fund_df['dltr_lag'] - fund_df['dlcch_lag'])
+            fund_df['delta_equity'] = (fund_df['sstk'] - fund_df['prstkc'] - fund_df['dvcq_ltm']) - (fund_df['sstk_lag'] - fund_df['prstkc_lag'] - fund_df['dvcq_lag'])
+            fund_df['delta_debt'] = (fund_df['dltis'] - fund_df['dltr'] - fund_df['dlcch']) - (fund_df['dltis_lag'] - fund_df['dltr_lag'] - fund_df['dlcch_lag'])
 
             # Calculate net external finance
-            fund_df[name] = (fund_df['delta_equityq'] + fund_df['delta_debtq']) / (0.5*fund_df["atq"] + 0.5*fund_df["atq_lag"])
+            fund_df[name] = (fund_df['delta_equity'] + fund_df['delta_debt']) / (0.5*(fund_df["atq"] + fund_df["atq_lag"]))
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
@@ -698,46 +686,41 @@ class FactorComputer():
         Return on net operating assets:
         Operating income / average net operating assets
         See Soliman (2008)
+
+        note: in the paper (check under artifacts, definition is ambiguous
+            on one hand, following their item lists, they claim the OA is calculated by AT - CHE - IVAO (item 32))
+            on the other hand, if you just follow their words, they claim OA = AT - CHE
+            after checking with the accounting intuitions and chatgpt, we go with the latter one.
         """
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
-        if qtr:
-            
-            # oiadpq: operating income before interest, atq: total assets, cheq: cash, ivao: short-term investments, dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
-            fund_df_quarter = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["oiadpq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"])
-            fund_df_annual = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ivao"]) 
-            print(fund_df_quarter)
-            print(fund_df_annual)
-            # Merge both data frames
-            fund_df = pd.merge_asof(fund_df_quarter, fund_df_annual, left_on=['datadate'], right_on=['datadate'], by=['gvkey'], direction='backward')
+        if qtr:            
+            # oiadpq: operating income before interest, atq: total assets, cheq: cash and short-term investments, 
+            # dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["oiadpq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"])
             
             # Get current and lagged values
-            fund_df['oiadpq_ltm'] = fund_df.groupby('gvkey')['oiadpq'].transform(lambda x: x.rolling(4).sum()) # an income term
+            fund_df['oiadpq_ltm'] = rolling_sum(fund_df, 'oiadpq') # an income term
 
             # Fill forward for LTM values
             ltm_cols = ["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]
             for col in ltm_cols:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill')) # the rest are bs terms
-
-            # Lagged values (4 quarters back)
-            for col in ["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq", "ivao"]:
-                fund_df[f'{col}_lag'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.shift(4))
+                fund_df[col] = fill_forward(fund_df, col) # the rest are bs terms
 
             # Calculate net operating assets
-            fund_df["noaq"] = (fund_df["atq_ltm"] - fund_df["cheq_ltm"] - fund_df["ivao"]) - (fund_df["atq_ltm"] - fund_df["dlttq_ltm"] - fund_df["dlcq_ltm"] - fund_df["ceqq_ltm"] - fund_df["pstkq_ltm"] - fund_df["mibq_ltm"])
-            fund_df["noaq_lag"] = (fund_df["atq_lag"] - fund_df["cheq_lag"] - fund_df["ivao"]) - (fund_df["atq_lag"] - fund_df["dlttq_lag"] - fund_df["dlcq_lag"] - fund_df["ceqq_lag"] - fund_df["pstkq_lag"] - fund_df["mibq_lag"])
-        
+            fund_df['operating_assets'] = fund_df["atq"] - fund_df["cheq"]
+            fund_df['operating_liabilities'] = fund_df["atq"] - fund_df["dlttq"] - fund_df["dlcq"] - fund_df["ceqq"] - fund_df["pstkq"] - fund_df["mibq"]
+            fund_df["noaq"] = fund_df["operating_assets"] - fund_df["operating_liabilities"]
+            fund_df["noaq_lag"] = shift_n_rows(fund_df, "noaq", 4)
             # Calculate return on net operating assets
-            fund_df[name] = fund_df["oiadpq_ltm"] / (0.5* fund_df["noaq"] + 0.5*fund_df["noaq_lag"])
+            fund_df[name] = fund_df["oiadpq_ltm"] / (0.5*fund_df["noaq"] + 0.5*fund_df["noaq_lag"])
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
-    
     
     def profit_margin(self, qtr=True, name='f_pm'):
         """
@@ -749,10 +732,10 @@ class FactorComputer():
             return f'Done with {name}'
         if qtr:
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["oiadpq", "saleq"]) # oiadpq: operating income before interest, saleq: sales
-            
+
             # Get current values
-            fund_df['oiadpq_ltm'] = fund_df.groupby('gvkey')['oiadpq'].transform(lambda x: x.rolling(4).sum())
-            fund_df['saleq_ltm'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(4).sum())
+            fund_df['oiadpq_ltm'] = rolling_sum(fund_df, 'oiadpq')
+            fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
 
             # Calculate profit margin
             fund_df[name] = fund_df["oiadpq_ltm"] / fund_df["saleq_ltm"]
@@ -760,7 +743,6 @@ class FactorComputer():
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
@@ -775,39 +757,32 @@ class FactorComputer():
             return f'Done with {name}'
         if qtr:
             # saleq: sales, atq: total assets, cheq: cash, ivao: short-term investments, dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
-            fund_df_quarter = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]) 
-            fund_df_annual = get_funda(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ivao"]) 
-            print(fund_df_quarter)
-            print(fund_df_annual)
-            # Merge both data frames
-            fund_df = pd.merge_asof(fund_df_quarter, fund_df_annual, left_on=['datadate'], right_on=['datadate'], by=['gvkey'], direction='backward')
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]) 
             
             # Get current and lagged values
-            fund_df['saleq_ltm'] = fund_df.groupby('gvkey')['saleq'].transform(lambda x: x.rolling(4).sum())
+            fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
 
             ltm_cols = ["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]
             for col in ltm_cols:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
-                fund_df[f'{col}_lag'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.shift(4))
-
-            fund_df["ivao_lag"] = fund_df.groupby('gvkey')["ivao"].transform(lambda x: x.shift(4))
+                fund_df[col] = fill_forward(fund_df, col)
 
             # Calculate net operating assets
-            fund_df["noaq"] = (fund_df["atq_ltm"] - fund_df["cheq_ltm"] - fund_df["ivao"]) - (fund_df["atq_ltm"] - fund_df["dlttq_ltm"] - fund_df["dlcq_ltm"] - fund_df["ceqq_ltm"] - fund_df["pstkq_ltm"] - fund_df["mibq_ltm"])
-            fund_df["noaq_lag"] = (fund_df["atq_lag"] - fund_df["cheq_lag"] - fund_df["ivao_lag"]) - (fund_df["atq_lag"] - fund_df["dlttq_lag"] - fund_df["dlcq_lag"] - fund_df["ceqq_lag"] - fund_df["pstkq_lag"] - fund_df["mibq_lag"])
-        
+            fund_df['operating_assets'] = fund_df["atq"] - fund_df["cheq"]
+            fund_df['operating_liabilities'] = fund_df["atq"] - fund_df["dlttq"] - fund_df["dlcq"] - fund_df["ceqq"] - fund_df["pstkq"] - fund_df["mibq"]
+            fund_df["noaq"] = fund_df["operating_assets"] - fund_df["operating_liabilities"]
+            fund_df["noaq_lag"] = shift_n_rows(fund_df, "noaq", 4)
+
             # Calculate asset turnover
             fund_df[name] = fund_df["saleq_ltm"] / (0.5* fund_df["noaq"] + 0.5*fund_df["noaq_lag"])
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
 
-    def operating_profits_to_equity(self, qtr=True, name='f_ope'):
+    def operating_profits_to_equity(self, qtr=True, name='f_opte'):
         """
         Operating profits to equity:
         (Operating Income - Interest Expense) / Book equity, where Book equity is defined as Common Equity + Deferred Taxes and Investment Tax Credit - Preferred Stock
@@ -815,29 +790,29 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-             # saleq: sales, cogsq: cost of goods sold, xsgaq: general and administrative expenses, xintq: interest expense, ceqq: common equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq", "cogsq", "xsgaq", "xintq", "ceqq", "txditcq", "pstkq"])
+            # saleq: sales, cogsq: cost of goods sold, xsgaq: general and administrative expenses, 
+            # xintq: interest expense, seqq: total equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq", "cogsq", "xsgaq", "xintq", "seqq", "txditcq", "pstkq"])
             
             # Get current and lagged values
             # Calculate last twelve months (LTM) sums for relevant columns
             for col in ['saleq', 'cogsq', 'xsgaq', 'xintq']:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.rolling(4).sum())
+                fund_df[col] = fillna_with_0(fund_df, col)
+                fund_df[f'{col}_ltm'] = rolling_sum(fund_df, col)
             # Calculate 4-quarter lag for equity-related columns
-            for col in ['ceqq', 'txditcq', 'pstkq']:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
-                fund_df[f'{col}_lag'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.shift(4))
+            for col in ['seqq', 'txditcq', 'pstkq']:
+                fund_df[col] = fill_forward(fund_df, col)
+                fund_df[f'{col}_lag'] = shift_n_rows(fund_df, col, 4)
 
             # Calculate operating profits to equity
-            fund_df[name] = (fund_df['saleq_ltm'] - fund_df['cogsq_ltm'] - fund_df['xsgaq_ltm'] - fund_df['xintq_ltm']) / (fund_df['ceqq_lag'] + fund_df['txditcq_lag'] - fund_df['pstkq_lag'])
+            fund_df[name] = (fund_df['saleq_ltm'] - fund_df['cogsq_ltm'] - fund_df['xsgaq_ltm'] - fund_df['xintq_ltm']) / (fund_df['seqq_lag'] + fund_df['txditcq_lag'] - fund_df['pstkq_lag'])
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
-
 
     def book_leverage(self, qtr=True, name='f_bl'):
         """
@@ -847,21 +822,22 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # atq: total assets, ceqq: common equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["atq", "ceqq", "txditcq", "pstkq"]) 
+            # atq: total assets, seqq: total equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["atq", "seqq", "txditcq", "pstkq"]) 
             
+            for col in ['txditcq', 'pstkq']:
+                fund_df[col] = fill_forward(fund_df, col)
+
             # Calculate book leverage
-            fund_df[name] = fund_df["atq"] / (fund_df["ceqq"] + fund_df["txditcq"] - fund_df["pstkq"])
+            fund_df[name] = fund_df["atq"] / (fund_df["seqq"] + fund_df["txditcq"] - fund_df["pstkq"])
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
         
-
     def financial_constraints(self, qtr=True, name='f_fc'):
         """
         Financial constraints:
@@ -871,47 +847,43 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # ibq: income before extraordinary items, prstkcq: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, dpq: depreciation and amorization, ppentq: property, plant, and equipment, atq: total assets, ceq: common equity, txdbq: deferred taxes, dlttq: long-term debt, dlcq: debt in current liabilities, seqq: stockholder equity, dvpq: preferred dividends, cheq: cash and short-term investments
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq", "dpq", "ppentq", "atq", "ceqq", "txdbq", "dlttq", "dlcq", "seqq", "dvpsxq", "cshoq", "dvpq", "cheq"]) 
+            # ibq: income before extraordinary items, prstkcq: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, dpq: depreciation and amorization, 
+            # ppentq: property, plant, and equipment, atq: total assets, ceq: common equity, txdbq: deferred taxes, dlttq: long-term debt, dlcq: debt in current liabilities, seqq: stockholder equity, dvpq: preferred dividends, cheq: cash and short-term investments
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["ibq", "dpq", "ppentq", "atq", "seqq", "txdbq", "dlttq", "dlcq", "ceqq", "dvpsxq", "cshoq", "dvpq", "cheq"]) 
             
-            # Declared dividends is not available on quarterly basis. Therefore, we construct an approximation
+            # total cash dividends
+            fund_df['dvpsxq'] = fillna_with_0(fund_df, 'dvpsxq')
+            fund_df['cshoq'] = fillna_with_0(fund_df, 'cshoq')
             fund_df["dvcq"] = fund_df["dvpsxq"] * fund_df["cshoq"]
 
             # Get current values
             # LTM sums for relevant items
             for col in ['ibq', 'dpq', 'dvcq', 'dvpq']:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.rolling(4).sum())
+                fund_df[f'{col}_ltm'] = rolling_sum(fund_df, col)
             # Forward-fill for balance sheet items
-            for col in ['atq', 'ceqq', 'txdbq', 'dlttq', 'dlcq', 'seqq', 'cheq']:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
+            for col in ['atq', 'ceqq', 'txdbq', 'dlttq', 'dlcq', 'cheq', 'ppentq']:
+                fund_df[col] = fill_forward(fund_df, col)
 
             # Get lagged value    
-            fund_df['ppentq_lag'] = fund_df.groupby('gvkey')['ppentq'].transform(lambda x: x.shift(4))     
+            fund_df['ppentq_lag'] = shift_n_rows(fund_df, 'ppentq', 4)     
 
             # Load market cap
             price_df = marketcap_calculator(self.db, self.gvkey_list)
-
-            # Merge the fund_df and price_df
-            price_df = pd.merge_asof(price_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
-
-            # Calculate market assets
-            price_df["book_equity"] = price_df["ceqq_ltm"] + price_df["txditcq_ltm"] - price_df["pstkq_ltm"]
-            price_df["market_assets"] = price_df["atq_ltm"] - price_df["book_equity"] + price_df["marketcap"]
+            price_df = merge_mktcap_fundq(price_df, fund_df)
             
             # Calculate single ratios
             price_df["cash_flow_to_capital"] = (price_df['ibq_ltm'] + price_df['dpq_ltm']) / price_df['ppentq_lag']
-            price_df['tobins_q'] = (price_df['atq_ltm'] + price_df["marketcap"] - price_df['ceqq_ltm'] - price_df['txdbq_ltm']) / price_df['atq_ltm']
-            price_df['leverage'] = (price_df['dlttq_ltm'] + price_df['dlcq_ltm']) / (price_df['dlttq_ltm'] + price_df['dlcq_ltm'] + price_df['seqq_ltm'])
+            price_df['tobinsq'] = (price_df['atq'] + price_df["marketcap"] - price_df['ceqq'] - price_df['txdbq']) / price_df['atq']
+            price_df['leverage'] = (price_df['dlttq'] + price_df['dlcq']) / (price_df['dlttq'] + price_df['dlcq'] + price_df['ceqq'])
             price_df['dividends_to_capital'] = (price_df['dvcq_ltm'] + price_df['dvpq_ltm']) / price_df['ppentq_lag']
-            price_df['cash_to_capital'] = price_df['cheq_ltm'] / price_df['ppentq_lag']
+            price_df['cash_to_capital'] = price_df['cheq'] / price_df['ppentq_lag']
 
             # Calculate the KZ index
-            price_df[name] = -1.001909*price_df['cash_flow_to_capital'] + 0.2826389*price_df['tobins_q'] + 3.139193*price_df['leverage'] - 39.3678*price_df['dividends_to_capital'] - 1.314759*price_df['cash_to_capital']
+            price_df[name] = -1.001909*price_df['cash_flow_to_capital'] + 0.2826389*price_df['tobinsq'] + 3.139193*price_df['leverage'] - 39.3678*price_df['dividends_to_capital'] - 1.314759*price_df['cash_to_capital']
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(price_df)
-
             if self.gvkey_list is None:
                 save_file(price_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
@@ -926,24 +898,23 @@ class FactorComputer():
         if not check_if_calculation_needed(name, self.gvkey_list):
             return f'Done with {name}'
         if qtr:
-            # cheq: cash and short-term investments, atq: total assets, actq: non-cash current assets, ppentq: property, plant, and equipment
+            # cheq: cash and short-term investments, atq: total assets, actq: current assets, ppentq: property, plant, and equipment
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["cheq", "atq", "actq", "ppentq"]) 
             
             # Get current values
             for col in ['actq', 'ppentq', 'atq', 'cheq']:
-                fund_df[f'{col}_ltm'] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
+                fund_df[col] = fill_forward(fund_df, col)
 
             # Calculate book-scaled asset liquidity
-            fund_df[name] = -(fund_df["cheq_ltm"]/fund_df["atq_ltm"] + 0.75*(fund_df["actq_ltm"] - fund_df["cheq_ltm"])/fund_df["atq_ltm"] + 0.5*fund_df["ppentq_ltm"]/fund_df["atq_ltm"])
+            denom = fund_df["atq"]
+            fund_df[name] = -(fund_df["cheq"]/denom + 0.75*(fund_df["actq"] - fund_df["cheq"])/denom + 0.5*fund_df["ppentq"]/denom)
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
-
             if self.gvkey_list is None:
                 save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
-
 
     def market_scaled_asset_liquidity(self, qtr=True, name='f_msal'):
         """
@@ -955,29 +926,27 @@ class FactorComputer():
             return f'Done with {name}'
         if qtr:
             # cheq: cash and short-term investments, atq: total assets, actq: non-cash current assets, ppentq: property, plant, and equipment, ceqq: common equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["cheq", "atq", "actq", "ppentq", "ceqq", "txditcq", "pstkq"]) 
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["cheq", "atq", "actq", "ppentq", "seqq", "txditcq", "pstkq"]) 
             
             # Get current values
-            for col in ["actq", "ppentq", "atq", "cheq", "ceqq", "txditcq", "pstkq"]:
-                fund_df[f"{col}_ltm"] = fund_df.groupby('gvkey')[col].transform(lambda x: x.fillna(method='ffill'))
+            for col in ["actq", "ppentq", "atq", "cheq", "seqq", "txditcq", "pstkq"]:
+                fund_df[col] = fill_forward(fund_df, col)
 
             # Get market cap
             price_df = marketcap_calculator(self.db, self.gvkey_list)
-
-            # Merge the fund_df and marketcap_df
-            price_df = pd.merge_asof(price_df, fund_df, left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
+            price_df = merge_mktcap_fundq(price_df, fund_df)
 
             # Calculate market assets
-            price_df["book_equity"] = price_df["ceqq_ltm"] + price_df["txditcq_ltm"] - price_df["pstkq_ltm"]
-            price_df["market_assets"] = price_df["atq_ltm"] - price_df["book_equity"] + price_df["marketcap"]
-            
+            price_df["book_equity"] = price_df["seqq"] + price_df["txditcq"] - price_df["pstkq"]
+            price_df["market_assets"] = price_df["atq"] - price_df["book_equity"] + price_df["marketcap"]
+
             # Calculate market-scaled asset liquidity
-            price_df[name] = -(price_df["cheq_ltm"]/price_df["market_assets"] + 0.75*(price_df["actq_ltm"] - price_df["cheq_ltm"])/price_df["market_assets"] + 0.50*price_df["ppentq_ltm"]/price_df["market_assets"])
+            denom = price_df["market_assets"]    
+            price_df[name] = -(price_df["cheq"]/denom + 0.75*(price_df["actq"] - price_df["cheq"])/denom + 0.50*price_df["ppentq"]/denom)
 
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(price_df)
-
             if self.gvkey_list is None:
                 save_file(price_df, name) # only save the file if gvkey_list is None (meaning select all)
         return f'Done with {name}' 
