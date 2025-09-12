@@ -10,6 +10,27 @@ resolution-markers = [
 ]
 
 [[package]]
+name = "academic-data-download"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "fastparquet" },
+    { name = "python-dotenv" },
+    { name = "sqlalchemy" },
+    { name = "tqdm" },
+    { name = "wrds" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastparquet", specifier = "==2024.11.0" },
+    { name = "python-dotenv", specifier = "==1.1.1" },
+    { name = "sqlalchemy", specifier = ">=2.0.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "wrds", specifier = ">=3.0.0" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -198,27 +219,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/4c/9a/8a53dfa0c564f0683b693aa84878074d82ce2516e0f599d2a19ff3a0b073/fastparquet-2024.11.0-cp39-cp39-musllinux_1_2_i686.whl", hash = "sha256:6b936dcf40ca5fff9e70383d48811b1482b871ff74af857cb4db5f4d072f01ab", size = 1743186, upload-time = "2024-11-12T20:38:29.207Z" },
     { url = "https://files.pythonhosted.org/packages/cd/f6/61986beb1a894b40e7b9e9f5d0228ca068e005e66576af0b4fa94481ffbc/fastparquet-2024.11.0-cp39-cp39-musllinux_1_2_x86_64.whl", hash = "sha256:4abd3426607335e5ad09be29ef4eeccdf097710e44420deac16893cee64ea0d8", size = 1784121, upload-time = "2024-11-12T20:38:32.245Z" },
     { url = "https://files.pythonhosted.org/packages/91/71/2cf345d0ccf1239108190bcd838a19b289fa1bac5676e8ae701ae24b602f/fastparquet-2024.11.0-cp39-cp39-win_amd64.whl", hash = "sha256:6ec7b398a86432993441d0a08dfae59e29649c803ed64ec4b1d7c3e0855b14cb", size = 671248, upload-time = "2024-11-12T20:38:34.334Z" },
-]
-
-[[package]]
-name = "finance-research"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "fastparquet" },
-    { name = "python-dotenv" },
-    { name = "sqlalchemy" },
-    { name = "tqdm" },
-    { name = "wrds" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastparquet", specifier = "==2024.11.0" },
-    { name = "python-dotenv", specifier = "==1.1.1" },
-    { name = "sqlalchemy", specifier = ">=2.0.0" },
-    { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "wrds", specifier = ">=3.0.0" },
 ]
 
 [[package]]

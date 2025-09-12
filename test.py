@@ -1,5 +1,5 @@
-from db_manager.wrds_sql import get_sp500_constituents_snapshot
-from utils.wrds_connect import connect_wrds
+from academic_data_download.db_manager.wrds_sql import get_sp500_constituents_snapshot
+from academic_data_download.utils.wrds_connect import connect_wrds
 import os
 import dotenv
 dotenv.load_dotenv()

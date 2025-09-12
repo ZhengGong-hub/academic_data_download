@@ -1,7 +1,7 @@
 import pandas as pd
 import glob 
 import time 
-from utils.col_transform import merge_mktcap_fundq
+from academic_data_download.utils.col_transform import merge_mktcap_fundq
 
 factor_addrs = glob.glob('data/factors/*.parquet')
 

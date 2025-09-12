@@ -1,6 +1,6 @@
 # compute factors
-from factors_lab.assembly_line import FactorComputer
-from utils.wrds_connect import connect_wrds
+from academic_data_download.factors_lab.assembly_line import FactorComputer
+from academic_data_download.utils.wrds_connect import connect_wrds
 import os
 import dotenv
 import pandas as pd

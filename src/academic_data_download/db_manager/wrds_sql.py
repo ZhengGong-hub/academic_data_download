@@ -3,9 +3,9 @@ import pandas as pd
 import tqdm
 import numpy as np
 import glob
-from utils.merger import merge_link_table_crsp, merge_link_table_msp500list
-from utils.clean import crsp_clean
-from utils.sneak_peek import sneak_peek
+from academic_data_download.utils.merger import merge_link_table_crsp, merge_link_table_msp500list
+from academic_data_download.utils.clean import crsp_clean
+from academic_data_download.utils.sneak_peek import sneak_peek
 
 def get_fundq(db, fund_list, verbose=False, gvkey_list=None, start_year=2000):
     """

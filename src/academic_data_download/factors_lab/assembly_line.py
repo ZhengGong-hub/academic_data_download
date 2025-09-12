@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 
-from db_manager.wrds_sql import get_fundq, get_funda, marketcap_calculator, get_crsp_daily
-from utils.save_file import save_file
-from utils.necessary_cond_calculation import check_if_calculation_needed
-from utils.sneak_peek import sneak_peek
-from utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows, merge_funda_fundq
+from academic_data_download.db_manager.wrds_sql import get_fundq, get_funda, marketcap_calculator, get_crsp_daily
+from academic_data_download.utils.save_file import save_file
+from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
+from academic_data_download.utils.sneak_peek import sneak_peek
+from academic_data_download.utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows, merge_funda_fundq
 
 class FactorComputer():
     def __init__(self, verbose, db, gvkey_list):
