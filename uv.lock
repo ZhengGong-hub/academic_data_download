@@ -27,7 +27,7 @@ requires-dist = [
     { name = "python-dotenv", specifier = "==1.1.1" },
     { name = "sqlalchemy", specifier = ">=2.0.0" },
     { name = "tqdm", specifier = ">=4.67.1" },
-    { name = "wrds", specifier = ">=3.0.0" },
+    { name = "wrds", specifier = "==3.4.0" },
 ]
 
 [[package]]

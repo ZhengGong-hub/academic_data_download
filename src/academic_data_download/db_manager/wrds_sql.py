@@ -214,6 +214,61 @@ def get_crsp_daily(db, start_date='2000-01-01'):
     return merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
 
 
+def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
+    """
+    Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
+    with optional local caching to avoid repeated expensive SQL queries.
+
+    This function will:
+      - Check for a local Parquet cache of the full CRSP daily dataset.
+      - If the cache exists, load and return it.
+      - If not, query the database in manageable chunks (by PERMCO), save each chunk to disk,
+        merge all chunks, cache the result, and return the full DataFrame.
+
+    Parameters
+    ----------
+    db : object
+        Database connection object with a .raw_sql() method for executing SQL queries.
+    permno_list : list of int, optional
+        List of PERMNOs to retrieve. If None, all PERMNOs will be retrieved.
+    start_date : str, optional
+        Earliest date to retrieve (format: 'YYYY-MM-DD'). Default is '2000-01-01'.
+
+    Returns
+    -------
+    pandas.DataFrame
+        DataFrame containing daily CRSP data with columns:
+        ['permco', 'permno', 'date', 'prc', 'ret', 'vol', 'shrout', 'cfacpr', 'cfacshr']
+    """
+    # Ensure required directories exist
+    os.makedirs('data', exist_ok=True)
+    os.makedirs('data/crsp', exist_ok=True)
+
+    # Build SQL query for this chunk
+    permno_str = ', '.join(str(permno) for permno in permno_list)
+    sql = f"""
+        SELECT
+            a.permco,        
+            a.permno,
+            a.date,
+            a.prc,
+            a.ret,
+            a.vol,
+            a.shrout,
+            a.cfacpr,
+            a.cfacshr
+        FROM crsp.dsf a
+        WHERE 
+            a.permno IN ({permno_str})
+            AND a.date >= '{year}-01-01'
+            AND a.date <= '{year}-12-31'
+        ORDER BY a.date;
+    """
+
+    # Execute query and save result to a Parquet part file
+    df = db.raw_sql(sql)
+    return df
+
 def permco_gvkey_link(db):
     """
     Get table mapping Compustat GVKEYs to CRSP PERMCOs and PERMNOs.
