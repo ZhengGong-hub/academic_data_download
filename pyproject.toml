@@ -30,4 +30,4 @@ multi_line_output = 3
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-packages = ["academic_data_download"]
+packages = ["academic_data_download", "academic_data_download.db_manager", "academic_data_download.utils", "academic_data_download.factors_lab"]
