@@ -1,3 +1,12 @@
+
+import os, sys
+
+# get the project root (one level up from the folder this file lives in)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+
 import pandas as pd
 import numpy as np
 

@@ -16,7 +16,7 @@ gvkey_list = ['001690',
     '002176',
     "002817"
     ] # berkshire and apple, CAT
-gvkey_list = None
+#gvkey_list = None
 
 FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
 
