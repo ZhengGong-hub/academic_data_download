@@ -17,6 +17,7 @@ def shift_n_rows(df, col, row):
 
 
 def merge_mktcap_fundq(mktcap_df, fund_df):
+    fund_df.sort_values(by=['rdq', 'gvkey'], inplace=True)
     return pd.merge_asof(mktcap_df, fund_df.dropna(subset=['rdq']), left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
 
 
