@@ -256,7 +256,9 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
             a.vol,
             a.shrout,
             a.cfacpr,
-            a.cfacshr
+            a.cfacshr,
+            a.hsiccd,
+            a.openprc
         FROM crsp.dsf a
         WHERE 
             a.permno IN ({permno_str})
