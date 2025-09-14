@@ -231,8 +231,9 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
         Database connection object with a .raw_sql() method for executing SQL queries.
     permno_list : list of int, optional
         List of PERMNOs to retrieve. If None, all PERMNOs will be retrieved.
-    start_date : str, optional
+    year : int, optional
         Earliest date to retrieve (format: 'YYYY-MM-DD'). Default is '2000-01-01'.
+        if 'all', will retrieve all data.
 
     Returns
     -------
@@ -243,6 +244,11 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
     # Ensure required directories exist
     os.makedirs('data', exist_ok=True)
     os.makedirs('data/crsp', exist_ok=True)
+
+    if year == 'all':
+        year_condition = ""
+    else:
+        year_condition = f"AND a.date >= '{year}-01-01' AND a.date <= '{year}-12-31'"
 
     # Build SQL query for this chunk
     permno_str = ', '.join(str(permno) for permno in permno_list)
@@ -262,8 +268,7 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
         FROM crsp.dsf a
         WHERE 
             a.permno IN ({permno_str})
-            AND a.date >= '{year}-01-01'
-            AND a.date <= '{year}-12-31'
+            {year_condition}
         ORDER BY a.date;
     """
 
