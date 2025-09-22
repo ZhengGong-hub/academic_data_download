@@ -1,3 +1,12 @@
+
+import os, sys
+
+# get the project root (one level up from the folder this file lives in)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+
 import pandas as pd
 import numpy as np
 
@@ -561,6 +570,8 @@ class FactorComputer():
             # dlcq: short-term debt, txpq: income taxes payable, dpq: depreciation and amortization
             fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=_to_retrieve) 
 
+            fund_df["txpq"] = fillna_with_0(fund_df, "txpq")
+
             # Get lagged values (4 quarters ago)
             for col in _to_retrieve:
                 fund_df[col] = fill_forward(fund_df, col)
@@ -576,7 +587,7 @@ class FactorComputer():
             # Calculate operating accruals
             denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
             fund_df[name] = ((delta_ca - delta_cash) - (delta_cl - delta_std - delta_tp) - fund_df["dpq"]) / denom
-
+            print(fund_df.to_string())
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
@@ -621,7 +632,7 @@ class FactorComputer():
             # Calculate total accruals
             denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
             fund_df[name] = ((delta_coaq - delta_colq) + (delta_ncoaq - delta_ncolq) + (delta_finaq - delta_finlq)) / denom
-
+            print(fund_df.to_string())
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(fund_df)
@@ -881,6 +892,11 @@ class FactorComputer():
             # Calculate the KZ index
             price_df[name] = -1.001909*price_df['cash_flow_to_capital'] + 0.2826389*price_df['tobinsq'] + 3.139193*price_df['leverage'] - 39.3678*price_df['dividends_to_capital'] - 1.314759*price_df['cash_to_capital']
 
+            price_df = price_df.loc[
+            (   price_df['date'] >= pd.Timestamp('2012-01-01')) &
+                (price_df['gvkey'].isin(["001690"]))
+                ]
+            print(price_df.head(100).to_string(index=False))
             if self.verbose:
                 print("peeks at the data after calculation!")
                 sneak_peek(price_df)
