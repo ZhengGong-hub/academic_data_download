@@ -211,3 +211,5 @@ __marimo__/
 *.parquet
 
 playground/
+
+.DS_Store

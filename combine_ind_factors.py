@@ -22,5 +22,6 @@ for addr in factor_addrs:
     
     print(mktcap_df.query('gvkey == "001690"').tail())
 
+mktcap_df.drop_duplicates(subset=['gvkey', 'date'], keep=False, inplace=True) # just gvkey: ['010846' '030331']
 
 mktcap_df.to_parquet('data/factors_combined.parquet')

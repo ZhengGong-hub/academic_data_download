@@ -432,3 +432,80 @@ def get_sp500_constituents_snapshot(db, year):
     ;
     """
     return db.raw_sql(sql)
+
+
+def get_raven_full_equities(db, year=2024, relevance_threshold=75, event_similarity_days_threshold=90):
+    sql = f"""
+        SELECT
+            agg.*,
+            map.cusip
+        FROM (
+            SELECT
+                raven.rp_entity_id,
+                raven.country_code,
+                -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
+                CASE
+                    WHEN (
+                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                    )::time >= TIME '16:00:00'
+                    THEN (
+                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                    )::date + INTERVAL '1 day'
+                    ELSE (
+                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                    )::date
+                END AS trading_day_et,
+                COUNT(raven.event_sentiment_score) AS event_count,
+                AVG(raven.event_sentiment_score) AS mean_ess,
+                AVG(raven.bmq) AS mean_bmq,
+                AVG(raven.bee) AS mean_bee,
+                AVG(raven.bam) AS mean_bam,
+                AVG(raven.bca) AS mean_bca,
+                AVG(raven.css) AS mean_css,
+                AVG(raven.ber) AS mean_ber
+            FROM rpna.rpa_full_equities_{year} raven
+            WHERE raven.entity_type = 'COMP'
+                AND raven.country_code = 'US'
+                AND raven.event_sentiment_score IS NOT NULL
+                AND raven.relevance >= {relevance_threshold}
+                AND raven.event_similarity_days >= {event_similarity_days_threshold}
+            GROUP BY
+                raven.rp_entity_id,
+                raven.country_code,
+                trading_day_et
+        ) agg
+        LEFT JOIN rpna.wrds_all_mapping map
+            ON agg.rp_entity_id = map.rp_entity_id
+        ORDER BY agg.trading_day_et, map.ticker;
+    """
+    return db.raw_sql(sql).dropna(subset=['cusip']).drop_duplicates(subset=['cusip', 'trading_day_et', 'rp_entity_id'])
+
+
+def get_raven_global_macro(db, year=2024, relevance_threshold=75, event_similarity_days_threshold=90, us=True):
+
+    sql = f"""
+        SELECT
+            -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
+            CASE
+                WHEN (
+                    ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                )::time >= TIME '16:00:00'
+                THEN (
+                    ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                )::date + INTERVAL '1 day'
+                ELSE (
+                    ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+                )::date
+            END AS trading_day_et,
+            CASE WHEN raven.country_code = 'US' THEN 'US' ELSE 'RoW' END AS us_bucket,
+            COUNT(*)      AS event_count,
+            AVG(raven.event_sentiment_score)      AS mean_ess
+        FROM rpna.rpa_full_global_macro_{year} AS raven
+        WHERE raven.entity_type = 'PLCE'
+            AND raven.event_sentiment_score IS NOT NULL
+            AND raven.relevance >= {relevance_threshold}
+            AND raven.event_similarity_days >= {event_similarity_days_threshold}
+        GROUP BY trading_day_et, us_bucket
+        ORDER BY trading_day_et, us_bucket;
+    """
+    return db.raw_sql(sql)

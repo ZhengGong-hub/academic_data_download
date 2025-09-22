@@ -53,3 +53,7 @@ FactorComputer.book_leverage(qtr=True, name='f_bl')
 FactorComputer.financial_constraints(qtr=True, name='f_fc')
 FactorComputer.book_scaled_asset_liquidity(qtr=True, name='f_bsal')
 FactorComputer.market_scaled_asset_liquidity(qtr=True, name='f_msal')
+
+# ravenpack
+FactorComputer.ravenpack_equities(name=f'f_rp_ess', start_year=2009, end_year=2025)
+FactorComputer.ravenpack_global_macro(name=f'f_rp_global_macro', start_year=2009, end_year=2025)
