@@ -122,7 +122,7 @@ def get_funda(db, fund_list, start_year=2000, gvkey_list=None, verbose=False):
         df[col] = df[col].astype(float).round(2)
     return df
 
-def get_crsp_daily(db, start_date='2000-01-01'):
+def get_crsp_daily(db, start_date='2000-01-01', permno_list=None):
     """
     Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
     with optional local caching to avoid repeated expensive SQL queries.
@@ -165,7 +165,12 @@ def get_crsp_daily(db, start_date='2000-01-01'):
     cache_path = "data/crsp/crsp_daily.parquet"
     if os.path.exists(cache_path):
         print("Cache file for CRSP daily data found. Loading from disk...")
-        return merge_link_table_crsp(link_df, crsp_clean(pd.read_parquet(cache_path)))
+        crsp_daily = merge_link_table_crsp(link_df, crsp_clean(pd.read_parquet(cache_path)))
+
+        # only keep the gvkey in the gvkey_list
+        if permno_list is not None:
+            crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
+        return crsp_daily
 
     print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
 
@@ -190,7 +195,8 @@ def get_crsp_daily(db, start_date='2000-01-01'):
                 a.vol,
                 a.shrout,
                 a.cfacpr,
-                a.cfacshr
+                a.cfacshr,
+                a.openprc
             FROM crsp.dsf a
             WHERE 
                 a.permco IN ({permco_str})
@@ -211,10 +217,13 @@ def get_crsp_daily(db, start_date='2000-01-01'):
 
     # merge link table with price_df_agg
     link_df = permco_gvkey_link(db)
-    return merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
+    crsp_daily = merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
+    if permno_list is not None:
+        crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
+    return crsp_daily
 
 
-def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
+def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020, start_year=2000):
     """
     Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
     with optional local caching to avoid repeated expensive SQL queries.
@@ -250,8 +259,16 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
     else:
         year_condition = f"AND a.date >= '{year}-01-01' AND a.date <= '{year}-12-31'"
 
-    # Build SQL query for this chunk
-    permno_str = ', '.join(str(permno) for permno in permno_list)
+    if permno_list is not None:
+        permno_str = 'a.permno IN ('+', '.join(str(permno) for permno in permno_list)+')'
+    else:
+        permno_str = "1=1"
+
+    if start_year is not None:
+        start_year_condition = f"AND a.date >= '{start_year}-01-01'"
+    else:
+        start_year_condition = ""
+
     sql = f"""
         SELECT
             a.permco,        
@@ -267,8 +284,9 @@ def get_crsp_daily_by_permno_by_year(db, permno_list=None, year=2020):
             a.openprc
         FROM crsp.dsf a
         WHERE 
-            a.permno IN ({permno_str})
+            {permno_str}
             {year_condition}
+            {start_year_condition}
         ORDER BY a.date;
     """
 

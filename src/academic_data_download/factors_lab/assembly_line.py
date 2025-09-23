@@ -975,19 +975,23 @@ class FactorComputer():
         print("finished with data retrieval!")
 
         # rename 
-        total_df.rename(columns={'mean_ess': 'f_rp_ess'}, inplace=True)
-        total_df.rename(columns={'mean_bmq': 'f_rp_bmq'}, inplace=True)
-        total_df.rename(columns={'mean_bee': 'f_rp_bee'}, inplace=True)
-        total_df.rename(columns={'mean_bam': 'f_rp_bam'}, inplace=True)
-        total_df.rename(columns={'mean_bca': 'f_rp_bca'}, inplace=True)
-        total_df.rename(columns={'mean_css': 'f_rp_css'}, inplace=True)
-        total_df.rename(columns={'mean_ber': 'f_rp_ber'}, inplace=True)
+        total_df.rename(columns={
+            'mean_ess': 'f_rp_ess',
+            'mean_bmq': 'f_rp_bmq',
+            'mean_bee': 'f_rp_bee',
+            'mean_bam': 'f_rp_bam',
+            'mean_bca': 'f_rp_bca',
+            'mean_css': 'f_rp_css',
+            'mean_ber': 'f_rp_ber'
+        }, inplace=True)
         total_df.rename(columns={'event_count': 'f_rp_event_count'}, inplace=True)
 
         # to datetime
         total_df['trading_day_et'] = pd.to_datetime(total_df['trading_day_et'])
 
-        # groupby permco and trading_day_et and rp_entity_id and do some weighted average weighted by col: event_count
+        # special case handle: in the for loop by the year, each df will contain also the jan.1 of the next year, therefore, for 
+        #   2 dfs next to each other, there is a one-day overlap, i.e. Jan.1. 
+        #   the next line of code is to handle this case
         total_df = total_df.groupby(['permco', 'trading_day_et']).agg({
             'f_rp_ess': 'mean',
             'f_rp_bmq': 'mean',
@@ -1001,21 +1005,26 @@ class FactorComputer():
 
         # create a empty df where the date are all the dates in the year and the permco are all the permco in the total_df
         # Create cartesian product of all trading days and all unique permco
+        # we create a df, that looks like:
+        # ind  date permco
+        # 1    2009-01-01 1001 
+        # 2    2009-01-02 1001 
+        # 3    2009-01-03 1001 
+        # 4    2009-01-04 1001 
+        # 5    2009-01-05 1001 
         all_days = pd.date_range(start=f'{start_year}-01-01', end=f'{end_year}-12-31', freq='D')
         all_permco = total_df['permco'].unique()
+        # first loops over all days, for each day, loops over all permco, and creates a df, that looks like:
         daily_df = pd.MultiIndex.from_product([all_days, all_permco], names=['trading_day_et', 'permco']).to_frame(index=False)
         daily_df = pd.merge(daily_df, total_df, on=['permco', 'trading_day_et'], how='left').fillna(0)
 
-        # weighted score weighted by event_count for all relevant columns
-        agg_cols = [
-            'f_rp_ess', 'f_rp_bmq', 'f_rp_bee', 'f_rp_bam', 'f_rp_bca', 'f_rp_css', 'f_rp_ber'
-        ]
+
         # Event count rolling sums
         daily_df['f_rp_event_count_agg_7d'] = daily_df.groupby('permco')['f_rp_event_count'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
         daily_df['f_rp_event_count_agg_30d'] = daily_df.groupby('permco')['f_rp_event_count'].transform(lambda x: x.rolling(window=30, min_periods=1).sum())
 
         # Weighted rolling averages for each column
-        for col in agg_cols:
+        for col in ['f_rp_ess', 'f_rp_bmq', 'f_rp_bee', 'f_rp_bam', 'f_rp_bca', 'f_rp_css', 'f_rp_ber']:
             for window in [7, 30]:
                 agg_col_name = f'{col}_agg_{window}d'
                 # Calculate weighted rolling average for each permco
