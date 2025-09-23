@@ -438,7 +438,11 @@ def get_raven_full_equities(db, year=2024, relevance_threshold=75, event_similar
     sql = f"""
         SELECT
             agg.*,
-            map.cusip
+            map.cusip,
+            ds.ticker,
+            ds.namedt,
+            ds.nameendt,
+            ds.permco
         FROM (
             SELECT
                 raven.rp_entity_id,
@@ -476,9 +480,13 @@ def get_raven_full_equities(db, year=2024, relevance_threshold=75, event_similar
         ) agg
         LEFT JOIN rpna.wrds_all_mapping map
             ON agg.rp_entity_id = map.rp_entity_id
-        ORDER BY agg.trading_day_et, map.ticker;
+        LEFT JOIN crsp.dsenames ds
+            ON LEFT(UPPER(REGEXP_REPLACE(map.cusip, '[^A-Z0-9]', '', 'g')), 8) = ds.cusip
+            AND agg.trading_day_et >= ds.namedt
+            AND agg.trading_day_et <= ds.nameendt
+        ORDER BY agg.trading_day_et, ds.ticker;
     """
-    return db.raw_sql(sql).dropna(subset=['cusip']).drop_duplicates(subset=['cusip', 'trading_day_et', 'rp_entity_id'])
+    return db.raw_sql(sql).dropna(subset=['permco']).drop_duplicates(subset=['trading_day_et', 'permco'])
 
 
 def get_raven_global_macro(db, year=2024, relevance_threshold=75, event_similarity_days_threshold=90, us=True):

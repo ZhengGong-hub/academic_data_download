@@ -965,12 +965,13 @@ class FactorComputer():
 
         for year in range(start_year, end_year+1):
             raven_df = get_raven_full_equities(db=self.db, year=year, relevance_threshold=75, event_similarity_days_threshold=90)
+
             if self.verbose:
                 print(f"peeks at the data after calculation of the year {year}!")
                 sneak_peek(raven_df)
             total_df.append(raven_df)
         
-        total_df = pd.concat(total_df).drop(columns=['rp_entity_id'])
+        total_df = pd.concat(total_df)
         print("finished with data retrieval!")
 
         # rename 
@@ -986,8 +987,8 @@ class FactorComputer():
         # to datetime
         total_df['trading_day_et'] = pd.to_datetime(total_df['trading_day_et'])
 
-        # groupby cusip and trading_day_et and rp_entity_id and do some weighted average weighted by col: event_count
-        total_df = total_df.groupby(['cusip', 'trading_day_et']).agg({
+        # groupby permco and trading_day_et and rp_entity_id and do some weighted average weighted by col: event_count
+        total_df = total_df.groupby(['permco', 'trading_day_et']).agg({
             'f_rp_ess': 'mean',
             'f_rp_bmq': 'mean',
             'f_rp_bee': 'mean',
@@ -998,28 +999,28 @@ class FactorComputer():
             'f_rp_event_count': 'sum'
         }).reset_index()
 
-        # create a empty df where the date are all the dates in the year and the cusip are all the cusip in the total_df
-        # Create cartesian product of all trading days and all unique cusips
+        # create a empty df where the date are all the dates in the year and the permco are all the permco in the total_df
+        # Create cartesian product of all trading days and all unique permco
         all_days = pd.date_range(start=f'{start_year}-01-01', end=f'{end_year}-12-31', freq='D')
-        all_cusips = total_df['cusip'].unique()
-        daily_df = pd.MultiIndex.from_product([all_days, all_cusips], names=['trading_day_et', 'cusip']).to_frame(index=False)
-        daily_df = pd.merge(daily_df, total_df, on=['cusip', 'trading_day_et'], how='left').fillna(0)
+        all_permco = total_df['permco'].unique()
+        daily_df = pd.MultiIndex.from_product([all_days, all_permco], names=['trading_day_et', 'permco']).to_frame(index=False)
+        daily_df = pd.merge(daily_df, total_df, on=['permco', 'trading_day_et'], how='left').fillna(0)
 
         # weighted score weighted by event_count for all relevant columns
         agg_cols = [
             'f_rp_ess', 'f_rp_bmq', 'f_rp_bee', 'f_rp_bam', 'f_rp_bca', 'f_rp_css', 'f_rp_ber'
         ]
         # Event count rolling sums
-        daily_df['f_rp_event_count_agg_7d'] = daily_df.groupby('cusip')['f_rp_event_count'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
-        daily_df['f_rp_event_count_agg_30d'] = daily_df.groupby('cusip')['f_rp_event_count'].transform(lambda x: x.rolling(window=30, min_periods=1).sum())
+        daily_df['f_rp_event_count_agg_7d'] = daily_df.groupby('permco')['f_rp_event_count'].transform(lambda x: x.rolling(window=7, min_periods=1).sum())
+        daily_df['f_rp_event_count_agg_30d'] = daily_df.groupby('permco')['f_rp_event_count'].transform(lambda x: x.rolling(window=30, min_periods=1).sum())
 
         # Weighted rolling averages for each column
         for col in agg_cols:
             for window in [7, 30]:
                 agg_col_name = f'{col}_agg_{window}d'
-                # Calculate weighted rolling average for each cusip
+                # Calculate weighted rolling average for each permco
                 daily_df[f'{col}_times_event_count'] = daily_df[col] * daily_df['f_rp_event_count']
-                daily_df[agg_col_name] = daily_df.groupby('cusip')[f'{col}_times_event_count'].transform(lambda x: x.rolling(window=window, min_periods=1).sum()) / daily_df[f'f_rp_event_count_agg_{window}d']
+                daily_df[agg_col_name] = daily_df.groupby('permco')[f'{col}_times_event_count'].transform(lambda x: x.rolling(window=window, min_periods=1).sum()) / daily_df[f'f_rp_event_count_agg_{window}d']
 
         if self.verbose:
             print("peeks at the data after calculation!")
@@ -1038,6 +1039,7 @@ class FactorComputer():
 
         for year in range(start_year, end_year+1):
             raven_df = get_raven_global_macro(db=self.db, year=year, relevance_threshold=75, event_similarity_days_threshold=90)
+
             if self.verbose:
                 print(f"peeks at the data after calculation of the year {year}!")
                 sneak_peek(raven_df)
@@ -1053,14 +1055,13 @@ class FactorComputer():
         # to datetime
         total_df['trading_day_et'] = pd.to_datetime(total_df['trading_day_et'])
 
-        # groupby us_bucket and trading_day_et and rp_entity_id and do some weighted average weighted by col: event_count
+        # groupby us_bucket and trading_day_et and do some weighted average weighted by col: event_count
         total_df = total_df.groupby(['us_bucket', 'trading_day_et']).agg({
             'f_rp_ess': 'mean',
             'f_rp_event_count': 'sum'
         }).reset_index()
 
-        # create a empty df where the date are all the dates in the year and the cusip are all the cusip in the total_df
-        # Create cartesian product of all trading days and all unique cusips
+        # create a empty df where the date are all the dates in the year and the us_bucket are all the us_bucket in the total_df
         all_days = pd.date_range(start=f'{start_year}-01-01', end=f'{end_year}-12-31', freq='D')
         us_buckets = ['US', 'RoW']
         daily_df = pd.MultiIndex.from_product([all_days, us_buckets], names=['trading_day_et', 'us_bucket']).to_frame(index=False)
