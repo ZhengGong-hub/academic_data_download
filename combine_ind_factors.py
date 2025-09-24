@@ -2,8 +2,11 @@ import pandas as pd
 import glob 
 import time 
 from academic_data_download.utils.col_transform import merge_mktcap_fundq
+import os 
 
-factor_addrs = glob.glob('data/factors/*.parquet')
+os.makedirs('data/factors/combined', exist_ok=True)
+
+factor_addrs = glob.glob('data/factors/single_factor/*.parquet')
 
 mktcap_df = pd.read_parquet('data/crsp/marketcap.parquet')
 print(mktcap_df.head())
@@ -24,4 +27,4 @@ for addr in factor_addrs:
 
 mktcap_df.drop_duplicates(subset=['gvkey', 'date'], keep=False, inplace=True) # just gvkey: ['010846' '030331']
 
-mktcap_df.to_parquet('data/factors_combined.parquet')
+mktcap_df.to_parquet('data/factors/combined/factors_combined.parquet')

@@ -16,7 +16,8 @@ dependencies = [
     "wrds==3.4.0",
     "python-dotenv==1.1.1",
     "fastparquet==2024.11.0",
-    "tqdm>=4.67.1"
+    "tqdm>=4.67.1",
+    "openpyxl"
 ]
 
 [tool.black]
