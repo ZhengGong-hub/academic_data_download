@@ -34,6 +34,9 @@ for path in bbg_macro_var_path:
     macro_var_df = pd.merge(macro_var_df, df[['trading_day_et', f'f_{macro_var_name}']], on=['trading_day_et'], how='left')
 macro_var_df.fillna(method='ffill', inplace=True)
 
+to_divide_by_100_cols = ['f_3mTreasury', 'f_10yTreasury', 'f_CreditSpread', 'f_ConsumerPriceIndex']
+macro_var_df[to_divide_by_100_cols] = macro_var_df[to_divide_by_100_cols] / 100
+
 print("Macro variables loaded. Last few rows:")
 print(macro_var_df.tail())
 
@@ -68,8 +71,16 @@ print(pricevol_df.head())
 print("Step 4: Loading RavenPack equities data...")
 # load ravenpack equities
 ravenpack_df = pd.read_parquet(ravenpack_equities_path)
+# fillna with 0 for the columns starts with 'f_rp_'
+ravenpack_df[ravenpack_df.columns[ravenpack_df.columns.str.startswith('f_rp_')]] = ravenpack_df[ravenpack_df.columns[ravenpack_df.columns.str.startswith('f_rp_')]].fillna(0)
 print(f"  RavenPack equities data loaded from {ravenpack_equities_path}.")
 ravenpack_df = ravenpack_df[ravenpack_df['trading_day_et'] >= f'{start_year}-01-01']
+# drop certain columns that are not needed
+_to_drop_cols = ['bmq', 'bee', 'bam', 'bca', 'css', 'ber']
+ravenpack_df = ravenpack_df.drop(columns=[f'f_rp_{col}_agg_7d' for col in _to_drop_cols])
+ravenpack_df = ravenpack_df.drop(columns=[f'f_rp_{col}_agg_30d' for col in _to_drop_cols])
+ravenpack_df = ravenpack_df.drop(columns=[f'f_rp_{col}_times_event_count' for col in _to_drop_cols])
+ravenpack_df = ravenpack_df.drop(columns=['f_rp_ess_times_event_count'])
 # check whether there are duplicates on ['permco', 'date'] by assert False
 assert ravenpack_df.duplicated(subset=['permco', 'trading_day_et']).sum() == 0
 print("  RavenPack equities data after cleaning:")
@@ -85,6 +96,9 @@ ravenpack_global_macro_df_us = ravenpack_global_macro_df[ravenpack_global_macro_
 ravenpack_global_macro_df_us.columns = [col.replace('f_rp_', 'f_rp_us_') for col in ravenpack_global_macro_df_us.columns]
 ravenpack_global_macro_df_row = ravenpack_global_macro_df[ravenpack_global_macro_df['us_bucket'] == 'RoW'].drop(columns=['us_bucket'])
 ravenpack_global_macro_df_row.columns = [col.replace('f_rp_', 'f_rp_row_') for col in ravenpack_global_macro_df_row.columns]
+# drop certain columns that are not needed
+ravenpack_global_macro_df_us = ravenpack_global_macro_df_us.drop(columns=['f_rp_us_ess_times_event_count'])
+ravenpack_global_macro_df_row = ravenpack_global_macro_df_row.drop(columns=['f_rp_row_ess_times_event_count'])
 print("  RavenPack global macro US data after cleaning:")
 print(ravenpack_global_macro_df_us.head())
 
