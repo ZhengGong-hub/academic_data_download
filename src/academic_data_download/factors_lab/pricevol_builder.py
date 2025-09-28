@@ -1,0 +1,64 @@
+from locale import D_FMT
+import pandas as pd
+import numpy as np
+from typing import Callable
+from functools import wraps
+import inspect
+
+from academic_data_download.utils.save_file import save_file
+from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
+from academic_data_download.utils.sneak_peek import sneak_peek
+from academic_data_download.utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows, merge_funda_fundq
+from academic_data_download.db_manager.wrds_sql import WRDSManager
+
+def pricevol(fn: Callable) -> Callable:
+    @wraps(fn)
+    def wrapper(self, *args, **kwargs):
+        name = kwargs.get('name', 'crsp_daily')
+        if not check_if_calculation_needed(name, self.permno_list, save_path=self.save_path):
+            print(f'Done with {name} loading from cache!')
+            df = pd.read_parquet(f'{self.save_path}/{name}.parquet')
+            return df
+
+        df = fn(self, *args, **kwargs)
+        if self.verbose:
+            print("peeks at the data after calculation!")
+            sneak_peek(df)
+        if self.permno_list is None:
+            save_file(df, name, path=self.save_path)
+        print(f'Done with {name}!')
+        return df
+    return wrapper
+
+class PriceVolComputer():
+    def __init__(self, verbose, db, permno_list):
+        self.verbose = verbose
+        self.wrds_manager = WRDSManager(db, verbose=verbose)
+        self.permno_list = permno_list
+        self.save_path = 'data/pricevol'
+
+    @pricevol
+    def pricevol_processed(self, name='pricevol_processed'):
+        """
+        Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
+        """
+        df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/{name}.parquet', permno_list=self.permno_list)
+        df['date'] = pd.to_datetime(df['date'])
+        df['adjclose'] = df['prc'] / df['cfacpr']
+
+        # get the ret by aggregation of col: ret 
+        df['cum_ret_1y'] = df.groupby(['permno'])['ret'].transform(
+            lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
+        )
+        df['fwd_ret_1y'] = df.groupby(['permno'])['cum_ret_1y'].transform(
+            lambda x: x.shift(-252)
+        )
+
+        # exclude dividends ret 
+        df['cum_ret_1y_excl_div'] = df.groupby(['permno'])['retx'].transform(
+            lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
+        )
+        df['fwd_ret_1y_excl_div'] = df.groupby(['permno'])['cum_ret_1y_excl_div'].transform(
+            lambda x: x.shift(-252)
+        )
+        return df

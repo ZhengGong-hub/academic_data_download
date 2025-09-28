@@ -1,5 +1,5 @@
 # compute factors
-from academic_data_download.factors_lab.assembly_line import FactorComputer
+from academic_data_download.factors_lab.factor_builder import FactorBuilder
 from academic_data_download.utils.wrds_connect import connect_wrds
 import os
 import dotenv
@@ -18,7 +18,7 @@ gvkey_list = ['001690',
     ] # berkshire and apple, CAT
 gvkey_list = None
 
-FactorComputer = FactorComputer(gvkey_list=gvkey_list, verbose=True, db=db)
+FactorComputer = FactorBuilder(gvkey_list=gvkey_list, verbose=True, db=db)
 
 FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 # FactorComputer.sales_to_price(qtr=True, name='f_sp')

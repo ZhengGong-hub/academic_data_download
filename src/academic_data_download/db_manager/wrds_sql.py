@@ -3,10 +3,15 @@ import pandas as pd
 import tqdm
 import numpy as np
 import glob
+from jinja2 import Environment, FileSystemLoader
+
 from academic_data_download.utils.merger import merge_link_table_crsp, merge_link_table_msp500list
 from academic_data_download.utils.clean import crsp_clean
 from academic_data_download.utils.sneak_peek import sneak_peek
 
+# hyperparameter
+# set up environment, assuming your template lives in sql/
+env = Environment(loader=FileSystemLoader("src/academic_data_download/sql_inventory"))
 
 class WRDSManager():
     def __init__(self, db, verbose=True):
@@ -131,7 +136,7 @@ class WRDSManager():
             df[col] = df[col].astype(float).round(2)
         return df
 
-    def get_crsp_daily(self, start_date='2000-01-01', permno_list=None):
+    def get_crsp_daily(self, cache_path=None, start_date='2000-01-01', permno_list=None):
         """
         Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
         with optional local caching to avoid repeated expensive SQL queries.
@@ -152,83 +157,51 @@ class WRDSManager():
         Returns
         -------
         pandas.DataFrame
-            DataFrame containing daily CRSP data with columns:
-            ['permco', 'permno', 'date', 'prc', 'ret', 'vol', 'shrout', 'cfacpr', 'cfacshr']
-
-        Notes
-        -----
-        - The function uses a local Parquet file at 'data/crsp/crsp_daily.parquet' as a cache.
-        - If the cache is missing, the function will:
-            * Create necessary directories.
-            * Retrieve the list of unique PERMCOs from the Compustat-CRSP link table.
-            * Split the PERMCOs into 10 chunks to avoid overwhelming the database.
-            * For each chunk, query the CRSP DSF table for all dates >= start_date.
-            * Save each chunk as a separate Parquet file in 'data/crsp/parts/'.
-            * Concatenate all chunk files into a single DataFrame, save to the cache, and return.
-        - This process may take a long time and require significant disk space.
         """
-        # Retrieve unique PERMCOs from the Compustat-CRSP link table
-        link_df = self.permco_gvkey_link()
-        permco_list = link_df['permco'].dropna().unique()
-
-        cache_path = "data/crsp/crsp_daily.parquet"
-        if os.path.exists(cache_path):
-            print("Cache file for CRSP daily data found. Loading from disk...")
-            crsp_daily = merge_link_table_crsp(link_df, crsp_clean(pd.read_parquet(cache_path)))
-
-            # only keep the gvkey in the gvkey_list
-            if permno_list is not None:
-                crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
-            return crsp_daily
-
-        print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
-
         # Ensure required directories exist
-        os.makedirs('data', exist_ok=True)
-        os.makedirs('data/crsp', exist_ok=True)
-        os.makedirs('data/crsp/parts', exist_ok=True)
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 
-        # Split PERMCOs into 10 roughly equal chunks for manageable queries
-        permco_chunks = np.array_split(permco_list, 10)
+        # if we need to retrieve all permno, in this case, we need to retrieve price parts by parts
+        if permno_list is None:
+            link_df = self.permco_gvkey_link()
+            permno_list = link_df['permno'].dropna().unique()            
 
-        for idx, permco_chunk in enumerate(tqdm.tqdm(permco_chunks, desc="Downloading CRSP daily chunks")):
-            # Build SQL query for this chunk
-            permco_str = ', '.join(str(permco) for permco in permco_chunk)
-            sql = f"""
-                SELECT
-                    a.permco,        
-                    a.permno,
-                    a.date,
-                    a.prc,
-                    a.ret,
-                    a.vol,
-                    a.shrout,
-                    a.cfacpr,
-                    a.cfacshr,
-                    a.openprc
-                FROM crsp.dsf a
-                WHERE 
-                    a.permco IN ({permco_str})
-                    AND a.date >= '{start_date}'
-                ORDER BY a.date;
-            """
+            if os.path.exists(cache_path):
+                print("Cache file for CRSP daily data found. Loading from disk...")
+                return pd.read_parquet(cache_path)
+            else:
+                print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
 
-            # Execute query and save result to a Parquet part file
-            df = db.raw_sql(sql)
-            part_path = f'data/crsp/parts/crsp_daily_{idx}.parquet'
-            df.to_parquet(part_path, index=False)
+                # Split PERMNOs into 10 roughly equal chunks for manageable queries
+                permno_chunks = np.array_split(permno_list, 10)
 
-        # Merge all part files into a single DataFrame
-        print("Merging all CRSP daily part files into a single DataFrame...")
-        price_df_agg = pd.concat([pd.read_parquet(f) for f in glob.glob('data/crsp/parts/crsp_daily_*.parquet')], ignore_index=True)
-        price_df_agg.to_parquet(cache_path, index=False)
-        print(f"CRSP daily data SQL query complete. Data cached at {cache_path}")
+                for idx, permno_chunk in enumerate(tqdm.tqdm(permno_chunks, desc="Downloading CRSP daily chunks")):
+                    # Build SQL query for this chunk
+                    template = env.get_template("crsp_dsf.sql.j2")
+                    sql = template.render(permno_list=permno_chunk, start_date=start_date)
+
+                    # Execute query and save result to a Parquet part file
+                    df = self.db.raw_sql(sql)
+                    os.mkdir(f'{os.path.dirname(cache_path)}/parts', exist_ok=True)
+                    df.to_parquet(f'{os.path.dirname(cache_path)}/parts/{idx}.parquet', index=False)
+
+                # Merge all part files into a single DataFrame
+                print("Merging all CRSP daily part files into a single DataFrame...")
+                price_df_agg = pd.concat([pd.read_parquet(f) for f in glob.glob(f'{os.path.dirname(cache_path)}/parts/*.parquet')], ignore_index=True)
+                price_df_agg.to_parquet(cache_path, index=False)
+                print(f"CRSP daily data SQL query complete. Data cached at {cache_path}")
+        # if we have a permno_list, in this case, we just retrieve the data live
+        else:
+            template = env.get_template("crsp_dsf.sql.j2")
+            sql = template.render(permno_list=permno_list, start_date=start_date)
+            price_df_agg = self.db.raw_sql(sql)
+            print(price_df_agg)
+            assert False
 
         # merge link table with price_df_agg
         link_df = self.permco_gvkey_link()
         crsp_daily = merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
-        if permno_list is not None:
-            crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
+        crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
         return crsp_daily
 
 

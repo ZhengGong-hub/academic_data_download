@@ -17,7 +17,8 @@ dependencies = [
     "python-dotenv==1.1.1",
     "fastparquet==2024.11.0",
     "tqdm>=4.67.1",
-    "openpyxl"
+    "openpyxl",
+    "jinja2"
 ]
 
 [tool.black]

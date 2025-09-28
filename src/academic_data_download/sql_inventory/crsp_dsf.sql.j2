@@ -1,0 +1,22 @@
+SELECT
+    a.permco,        
+    a.permno,
+    a.cusip,
+    a.date,
+    a.prc,
+    a.ret,
+    a.retx,
+    a.vol,
+    a.shrout,
+    a.cfacpr,
+    a.cfacshr,
+    a.openprc
+FROM crsp.dsf a
+WHERE
+    {% if permno_list %}
+    a.permno IN ({{ permno_list | join(', ') }})
+    {% endif %}
+    {% if start_date %}
+    AND a.date >= '{{ start_date }}'
+    {% endif %}
+ORDER BY a.date;
