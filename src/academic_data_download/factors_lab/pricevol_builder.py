@@ -9,7 +9,7 @@ from academic_data_download.utils.save_file import save_file
 from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
 from academic_data_download.utils.sneak_peek import sneak_peek
 from academic_data_download.db_manager.wrds_sql import WRDSManager
-from academic_data_download.utils.merger import merge_permco_gvkey_link
+from academic_data_download.utils.merger import merge_permco_gvkey_link, merge_link_table_crsp
 
 def pricevol(fn: Callable) -> Callable:
     @wraps(fn)
@@ -50,6 +50,10 @@ class PriceVolComputer():
         """
         Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
         """
+        # get link table
+        permco_gvkey_link_df = self.wrds_manager.permco_gvkey_link()
+
+        # get pricevol data
         df = self.pricevol_raw()
         print("Converting date column to datetime...")
         df['date'] = pd.to_datetime(df['date'])
@@ -73,6 +77,9 @@ class PriceVolComputer():
         df['fwd_ret_1y_excl_div'] = df.groupby(['permno'])['cum_ret_1y_excl_div'].transform(
             lambda x: x.shift(-252)
         )
+
+        # merge with link table
+        df = merge_link_table_crsp(crsp_df=df, link_df=permco_gvkey_link_df)
         return df
 
     @pricevol

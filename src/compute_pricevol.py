@@ -16,5 +16,5 @@ permno_list = None
 #     ]
 
 PriceVolComputer = PriceVolComputer(permno_list=permno_list, verbose=True, db=db)
-# PriceVolComputer.pricevol_processed(name='pricevol_processed')
-PriceVolComputer.marketcap(name='marketcap')
+PriceVolComputer.pricevol_processed(name='pricevol_processed')
+# PriceVolComputer.marketcap(name='marketcap')
