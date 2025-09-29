@@ -1,0 +1,33 @@
+-- this is a test query
+SELECT
+    a.ticker,
+    a.cusip,
+    a.meanptg,
+    a.medptg,
+    a.stdev,
+    a.numest,
+    a.ptghigh,
+    a.ptglow,
+    a.statpers,
+    a.numdown1m,
+    a.numup1m,
+    a.numdown4w,
+    a.numup4w,
+    ds.namedt,
+    ds.nameendt,
+    ds.permco,
+    ds.permno
+FROM ibes.ptgsumu a
+LEFT JOIN crsp.dsenames ds
+    ON a.cusip = ds.cusip
+WHERE
+    1 = 1
+    AND a.usfirm = 1
+    {% if permno_list %}
+    AND ds.PERMNO IN ({{ permno_list | join(', ') }})
+    {% endif %}
+    AND a.statpers >= ds.namedt
+    AND a.statpers <= ds.nameendt
+    AND a.measure = 'PTG' -- represents the target price
+    AND a.curr = 'USD'
+    ;

@@ -28,6 +28,4 @@ def sql_execution_in_chunks(db, sql_renderer: Callable, column_to_chunk: str, ca
     # Merge all part files into a single DataFrame
     print("Merging all part files into a single DataFrame...")
     df_agg = pd.concat([pd.read_parquet(f) for f in glob.glob(f'{os.path.dirname(cache_path)}/parts/*.parquet')], ignore_index=True)
-    df_agg.to_parquet(cache_path, index=False)
-    print(f"merge all part files complete. Data cached at {cache_path}")
     return df_agg

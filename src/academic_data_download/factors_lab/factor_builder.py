@@ -194,6 +194,7 @@ class FactorBuilder():
 
         return mktcap_df
 
+    @factor
     def ev_multiple(self, qtr=True, name='f_evm'):
         """
         Enterprise Value to EBITDA
@@ -218,6 +219,7 @@ class FactorBuilder():
             mktcap[name] = mktcap['ev'] / mktcap['ebitda_ltm']
         return mktcap
 
+    @factor
     def advertising_to_marketcap(self, qtr=True, name='f_adp'):
         """
         Advertising to Market Cap
@@ -405,7 +407,6 @@ class FactorBuilder():
         See Xing (2008)
         """
         if qtr:
-
             # capx: capital expenditure
             fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # note: we just want to get the rdq column
             fund_df_annual = self.wrds_manager.get_funda(fund_list=["capx"], gvkey_list=self.gvkey_list, verbose=self.verbose) 

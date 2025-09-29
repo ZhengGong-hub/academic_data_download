@@ -8,8 +8,8 @@ import inspect
 from academic_data_download.utils.save_file import save_file
 from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
 from academic_data_download.utils.sneak_peek import sneak_peek
-from academic_data_download.utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows, merge_funda_fundq
 from academic_data_download.db_manager.wrds_sql import WRDSManager
+from academic_data_download.utils.merger import merge_permco_gvkey_link
 
 def pricevol(fn: Callable) -> Callable:
     @wraps(fn)
@@ -38,11 +38,19 @@ class PriceVolComputer():
         self.save_path = 'data/pricevol'
 
     @pricevol
+    def pricevol_raw(self, name='pricevol_raw'):
+        """
+        Retrieve raw price and volume data.
+        """
+        df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/pricevol_raw.parquet', permno_list=self.permno_list)
+        return df
+
+    @pricevol
     def pricevol_processed(self, name='pricevol_processed'):
         """
         Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
         """
-        df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/pricevol_raw.parquet', permno_list=self.permno_list)
+        df = self.pricevol_raw()
         print("Converting date column to datetime...")
         df['date'] = pd.to_datetime(df['date'])
         print("Calculating adjusted close price...")
@@ -66,3 +74,25 @@ class PriceVolComputer():
             lambda x: x.shift(-252)
         )
         return df
+
+    @pricevol
+    def marketcap(self, name='marketcap'):
+        # get link table
+        permco_gvkey_link_df = self.wrds_manager.permco_gvkey_link()
+
+        # get pricevol data
+        pricevol_df = self.pricevol_raw()
+
+        # calculate marketcap
+        pricevol_df['marketcap_permno'] = pricevol_df['prc'] * pricevol_df['shrout']
+
+        # sum across different permno for each permco (account for different share class)
+        mktcap_df = pricevol_df.groupby(['date','permco']).agg({'marketcap_permno': 'sum'}).reset_index()
+        mktcap_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
+        
+        # round to integer
+        mktcap_df['marketcap'] = mktcap_df['marketcap'].astype(int)
+
+        # merge with link table
+        mktcap_df = merge_permco_gvkey_link(mktcap_df, permco_gvkey_link_df)
+        return mktcap_df

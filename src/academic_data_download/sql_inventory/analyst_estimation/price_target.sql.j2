@@ -1,0 +1,36 @@
+SELECT
+    a.ticker,
+    a.actdats,
+    a.estimid,
+    a.alysnam,
+    a.value,
+    a.cusip,
+    a.amaskcd,
+    a.acttims,
+    a.anndats,
+    a.anntims,
+    ds.namedt,
+    ds.nameendt,
+    ds.permco,
+    ds.permno
+FROM ibes.ptgdetu a
+LEFT JOIN crsp.dsenames ds
+    ON a.cusip = ds.cusip
+WHERE
+    1 = 1
+    AND a.usfirm = 1
+    AND a.ANNDATS >= DATE '2000-01-01'
+    {% if permno_list %}
+    AND ds.PERMNO IN ({{ permno_list | join(', ') }})
+    {% endif %}
+    AND
+    a.horizon = '12' -- 12 months
+    AND
+    a.measure = 'PTG' -- represents the target price
+    AND
+    a.curr = 'USD'
+    AND
+    a.estcur = 'USD'
+    AND a.anndats >= ds.namedt
+    AND a.anndats <= ds.nameendt
+ORDER BY a.ANNDATS;

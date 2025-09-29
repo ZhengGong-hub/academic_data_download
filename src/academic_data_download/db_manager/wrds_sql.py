@@ -152,6 +152,22 @@ class WRDSManager():
 
         return pricevol_df
 
+    def get_price_target_summary(self, permno_list=None):
+        """
+        Get target price from CRSP daily data.
+        """
+        template = env.get_template("analyst_estimation/price_target_summary.sql.j2")
+        sql = template.render(permno_list=permno_list)
+        return self.db.raw_sql(sql)
+
+    def get_price_target_detail(self, permno_list=None):
+        """
+        Get target price from CRSP daily data.
+        """
+        template = env.get_template("analyst_estimation/price_target.sql.j2")
+        sql = template.render(permno_list=permno_list)
+        return self.db.raw_sql(sql)
+
     def permco_gvkey_link(self):
         """
         Get table mapping Compustat GVKEYs to CRSP PERMCOs and PERMNOs.
@@ -165,35 +181,6 @@ class WRDSManager():
         link_df = self.db.raw_sql(sql)
         return link_df
 
-    def marketcap_calculator(self, gvkey_list=None):
-        """
-        Calculate market cap from CRSP daily data.
-        """
-        os.makedirs('data/crsp', exist_ok=True)
-        if not os.path.exists(f'data/crsp/marketcap.parquet'):
-            crsp_df = self.get_crsp_daily()
-            crsp_df['marketcap_permno'] = crsp_df['prc'] * crsp_df['shrout']
-
-            # sum across different permno for each permco (account for different share class)
-            crsp_df = crsp_df.groupby(['date','permco', 'gvkey']).agg({'marketcap_permno': 'sum'}).reset_index()
-            crsp_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
-            
-            # round to integer
-            crsp_df['marketcap'] = crsp_df['marketcap'].astype(int)
-            crsp_df['gvkey'] = crsp_df['gvkey'].astype("string")
-            crsp_df.to_parquet(f'data/crsp/marketcap.parquet', index=False)
-        else:
-            crsp_df = pd.read_parquet(f'data/crsp/marketcap.parquet')
-            crsp_df['gvkey'] = crsp_df['gvkey'].astype("string")
-
-        # only keep the gvkey in the gvkey_list
-        if gvkey_list is not None:
-            crsp_df = crsp_df[crsp_df['gvkey'].isin(gvkey_list)]
-            
-        if self.verbose:
-            sneak_peek(crsp_df)
-        return crsp_df
-
     def get_sp500_constituents_snapshot(self, year):
         """
         Get SP500 list from CRSP. with link table and gic sector. at a given year.
@@ -201,7 +188,6 @@ class WRDSManager():
         template = env.get_template("sp500/sp500_constituents.sql.j2")
         sql = template.render(year=year)
         return self.db.raw_sql(sql)
-
 
     def get_raven_full_equities(self, year=2024, relevance_threshold=75, event_similarity_days_threshold=90, permno_list=None):
         sql = env.get_template("ravenpack/rp_equities.sql.j2").render(
