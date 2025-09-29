@@ -1,0 +1,23 @@
+SELECT
+    -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
+    CASE
+        WHEN (
+            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+        )::time >= TIME '16:00:00'
+        THEN (
+            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+        )::date + INTERVAL '1 day'
+        ELSE (
+            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+        )::date
+    END AS trading_day_et,
+    CASE WHEN raven.country_code = 'US' THEN 'US' ELSE 'RoW' END AS us_bucket,
+    COUNT(*)      AS event_count,
+    AVG(raven.event_sentiment_score)      AS mean_ess
+FROM rpna.rpa_full_global_macro_{{ year }} AS raven
+WHERE raven.entity_type = 'PLCE'
+    AND raven.event_sentiment_score IS NOT NULL
+    AND raven.relevance >= {{ relevance_threshold }}
+    AND raven.event_similarity_days >= {{ event_similarity_days_threshold }}
+GROUP BY trading_day_et, us_bucket
+ORDER BY trading_day_et, us_bucket;

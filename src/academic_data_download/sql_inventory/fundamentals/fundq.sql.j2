@@ -1,0 +1,20 @@
+SELECT
+    f.gvkey,
+    f.datadate,
+    f.fyearq,
+    f.fqtr,
+    f.rdq, -- report date
+    {{ fund_list | join(', ') }}
+FROM comp.fundq f
+WHERE f.indfmt = 'INDL' -- industrial format (excluding financial companies, but financial services companies ok)
+AND f.datafmt = 'STD' -- standard format
+AND f.consol  = 'C' -- consolidated financials (parents + subsidiaries, standard)
+AND f.popsrc  = 'D' -- domestic companies only
+AND f.curncdq = 'USD' -- US dollars as native currency of reporting only
+AND f.fyearq >= {{ start_year }}
+AND f.rdq IS NOT NULL
+AND f.datadate IS NOT NULL
+{% if gvkey_list %}
+AND f.gvkey IN ({{ gvkey_list | join(', ') }})
+{% endif %}
+ORDER BY f.rdq ASC

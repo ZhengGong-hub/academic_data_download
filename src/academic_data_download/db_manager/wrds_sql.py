@@ -8,6 +8,7 @@ from jinja2 import Environment, FileSystemLoader
 from academic_data_download.utils.merger import merge_link_table_crsp, merge_link_table_msp500list
 from academic_data_download.utils.clean import crsp_clean
 from academic_data_download.utils.sneak_peek import sneak_peek
+from academic_data_download.utils.sql_execution import sql_execution_in_chunks
 
 # hyperparameter
 # set up environment, assuming your template lives in sql/
@@ -24,7 +25,6 @@ class WRDSManager():
 
         Parameters
         ----------
-        db : database connection
         fund_list : list of str
             Columns to retrieve (e.g., ['saleq', 'cogsq', 'atq']).
         verbose : bool, optional
@@ -37,47 +37,22 @@ class WRDSManager():
         pandas.DataFrame
             Quarterly data with requested columns.
         """
-        fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
         if self.verbose: 
-            print("fund_list_sql: ", fund_list_sql)
+            print("fund_list: ", fund_list)
+            print("gvkey_list: ", gvkey_list)
 
-        # this is a sample gvkey_list: ['001690', '002176']
-        if gvkey_list is not None:
-            gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
-        else:
-            gvkey_list_sql = ""
-
-        if self.verbose:
-            print("gvkey_list_sql: ", gvkey_list_sql)
-
-        sql = f"""
-            SELECT
-                f.gvkey,
-                f.datadate,
-                f.fyearq,
-                f.fqtr,
-                f.rdq, -- report date
-                {fund_list_sql}
-            FROM comp.fundq f
-            WHERE f.indfmt = 'INDL' -- industrial format (excluding financial companies, but financial services companies ok)
-            AND f.datafmt = 'STD' -- standard format
-            AND f.consol  = 'C' -- consolidated financials (parents + subsidiaries, standard)
-            AND f.popsrc  = 'D' -- domestic companies only
-            AND f.curncdq = 'USD' -- US dollars as native currency of reporting only
-            AND f.fyearq >= {start_year}
-            AND f.rdq IS NOT NULL
-            AND f.datadate IS NOT NULL
-            {gvkey_list_sql}
-            ORDER BY f.rdq ASC
-        """
+        sql = env.get_template("fundamentals/fundq.sql.j2").render(
+            fund_list=fund_list, 
+            start_year=start_year, 
+            gvkey_list=gvkey_list)
 
         df = self.db.raw_sql(sql)
         df['datadate'] = pd.to_datetime(df['datadate'])
         df['rdq'] = pd.to_datetime(df['rdq'])
 
-        # the fund list value should have precision of 2
+        # the fund list value should have precision of 3
         for col in fund_list:
-            df[col] = df[col].astype(float).round(2)
+            df[col] = df[col].astype(float).round(3)
 
         if self.verbose:
             print("peeks at the data right after getting from wrds")
@@ -90,7 +65,6 @@ class WRDSManager():
 
         Parameters
         ----------
-        db : database connection
         fund_list : list of str
             Columns to retrieve (e.g., ['sale', 'cogs', 'at']).
         start_year : int, optional
@@ -103,65 +77,61 @@ class WRDSManager():
         pandas.DataFrame
             Annual data with requested columns.
         """
-        fund_list_sql = ", ".join([f"f.{col}" for col in fund_list])
-        # this is a sample gvkey_list: ['001690', '002176']
-        if gvkey_list is not None:
-            gvkey_list_sql = "AND f.gvkey IN ("+", ".join([f"'{col}'" for col in gvkey_list])+")"
-        else:
-            gvkey_list_sql = ""
-        if self.verbose:
-            print("gvkey_list_sql: ", gvkey_list_sql)
-        sql = f"""
-            SELECT
-                f.gvkey,
-                f.datadate,
-                f.fyear,
-                {fund_list_sql}
-            FROM comp.funda f
-            WHERE f.indfmt = 'INDL' -- industrial format (excluding financial companies, but financial services companies ok)
-            AND f.datafmt = 'STD' -- standard format
-            AND f.consol  = 'C' -- consolidated financials (parents + subsidiaries, standard)
-            AND f.popsrc  = 'D' -- domestic companies only
-            AND f.curncd = 'USD' -- US dollars as native currency of reporting only
-            AND f.fyear >= {start_year}
-            AND f.datadate IS NOT NULL
-            {gvkey_list_sql}
-            ORDER BY f.datadate ASC
-        """
+        if self.verbose: 
+            print("fund_list: ", fund_list)
+            print("gvkey_list: ", gvkey_list)
+
+        sql = env.get_template("fundamentals/funda.sql.j2").render(
+            fund_list=fund_list, 
+            start_year=start_year, 
+            gvkey_list=gvkey_list)
 
         df = self.db.raw_sql(sql)
         df['datadate'] = pd.to_datetime(df['datadate'])
-        # the fund list value should have precision of 2
+        
         for col in fund_list:
-            df[col] = df[col].astype(float).round(2)
+            df[col] = df[col].astype(float).round(3) # the fund list value should have precision of 3
         return df
 
-    def get_crsp_daily(self, cache_path=None, start_date='2000-01-01', permno_list=None):
+    def get_crsp_daily(
+            self, 
+            cache_path='data/pricevol/pricevol_raw.parquet', 
+            start_date='2000-01-01', 
+            crop_by_year = False,
+            permno_list=None,
+        ):
         """
-        Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
-        with optional local caching to avoid repeated expensive SQL queries.
+        Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors).
 
-        This function will:
-        - Check for a local Parquet cache of the full CRSP daily dataset.
-        - If the cache exists, load and return it.
-        - If not, query the database in manageable chunks (by PERMCO), save each chunk to disk,
-            merge all chunks, cache the result, and return the full DataFrame.
+        This method supports efficient data retrieval and caching:
+        - If a local Parquet cache exists at `cache_path`, the data is loaded from disk.
+        - If no cache is found and `permno_list` is None, the method retrieves all available PERMNOs,
+          queries the database in manageable chunks, saves each chunk, merges them, and caches the result.
+        - If a specific `permno_list` is provided, the method queries the database for just those PERMNOs.
 
         Parameters
         ----------
-        db : object
-            Database connection object with a .raw_sql() method for executing SQL queries.
+        cache_path : str, optional
+            Path to the local Parquet file for caching the CRSP daily data. Default is 'data/pricevol'.
         start_date : str, optional
             Earliest date to retrieve (format: 'YYYY-MM-DD'). Default is '2000-01-01'.
+        crop_by_year : bool, optional
+            Whether to crop the data by year. Default is False. Otherwise give a year as an integer, like 2020. This option does not work if you pass permno_list as None.
+        permno_list : list or None, optional
+            List of PERMNOs to retrieve. If None, retrieves all available PERMNOs.
 
         Returns
         -------
         pandas.DataFrame
+            DataFrame containing daily CRSP data with columns such as:
+            ['permco', 'permno', 'cusip', 'date', 'prc', 'ret', 'retx', 'vol', 'shrout', 'cfacpr', 'cfacshr', 'openprc']
         """
         # Ensure required directories exist
         os.makedirs(os.path.dirname(cache_path), exist_ok=True)
 
-        # if we need to retrieve all permno, in this case, we need to retrieve price parts by parts
+        template = env.get_template("pricevol/crsp_dsf.sql.j2") # template for the sql query
+
+        # If permno_list is None, retrieve all permnos in chunks and cache the result
         if permno_list is None:
             link_df = self.permco_gvkey_link()
             permno_list = link_df['permno'].dropna().unique()            
@@ -171,137 +141,29 @@ class WRDSManager():
                 return pd.read_parquet(cache_path)
             else:
                 print("Cache file for CRSP daily data not found. Starting SQL queries. This may take a while...")
-
-                # Split PERMNOs into 10 roughly equal chunks for manageable queries
-                permno_chunks = np.array_split(permno_list, 10)
-
-                for idx, permno_chunk in enumerate(tqdm.tqdm(permno_chunks, desc="Downloading CRSP daily chunks")):
-                    # Build SQL query for this chunk
-                    template = env.get_template("crsp_dsf.sql.j2")
-                    sql = template.render(permno_list=permno_chunk, start_date=start_date)
-
-                    # Execute query and save result to a Parquet part file
-                    df = self.db.raw_sql(sql)
-                    os.mkdir(f'{os.path.dirname(cache_path)}/parts', exist_ok=True)
-                    df.to_parquet(f'{os.path.dirname(cache_path)}/parts/{idx}.parquet', index=False)
-
-                # Merge all part files into a single DataFrame
-                print("Merging all CRSP daily part files into a single DataFrame...")
-                price_df_agg = pd.concat([pd.read_parquet(f) for f in glob.glob(f'{os.path.dirname(cache_path)}/parts/*.parquet')], ignore_index=True)
-                price_df_agg.to_parquet(cache_path, index=False)
-                print(f"CRSP daily data SQL query complete. Data cached at {cache_path}")
-        # if we have a permno_list, in this case, we just retrieve the data live
+                sql_renderer = lambda x: template.render(permno_list=x, start_date=start_date, crop_by_year=False) # there is no crop_by_year when we do not specify permno, because we want to save all results into a parquet file
+                pricevol_df = sql_execution_in_chunks(self.db, sql_renderer, permno_list, cache_path, chunk_size=10)
+                
+        # If a permno_list is provided, retrieve data for those permnos only
         else:
-            template = env.get_template("crsp_dsf.sql.j2")
-            sql = template.render(permno_list=permno_list, start_date=start_date)
-            price_df_agg = self.db.raw_sql(sql)
-            print(price_df_agg)
-            assert False
+            print("Retrieving CRSP daily data for a specific permno list...")
+            sql = template.render(permno_list=permno_list, start_date=start_date, crop_by_year=crop_by_year)
+            pricevol_df = self.db.raw_sql(sql)
 
-        # merge link table with price_df_agg
-        link_df = self.permco_gvkey_link()
-        crsp_daily = merge_link_table_crsp(link_df, crsp_clean(price_df_agg))
-        crsp_daily = crsp_daily[crsp_daily['permno'].isin(permno_list)]
-        return crsp_daily
-
-
-    def get_crsp_daily_by_permno_by_year(self, permno_list=None, year=2020, start_year=2000):
-        """
-        Retrieve daily CRSP stock data (price, return, volume, shares, adjustment factors) for all available PERMCOs,
-        with optional local caching to avoid repeated expensive SQL queries.
-
-        This function will:
-        - Check for a local Parquet cache of the full CRSP daily dataset.
-        - If the cache exists, load and return it.
-        - If not, query the database in manageable chunks (by PERMCO), save each chunk to disk,
-            merge all chunks, cache the result, and return the full DataFrame.
-
-        Parameters
-        ----------
-        db : object
-            Database connection object with a .raw_sql() method for executing SQL queries.
-        permno_list : list of int, optional
-            List of PERMNOs to retrieve. If None, all PERMNOs will be retrieved.
-        year : int, optional
-            Earliest date to retrieve (format: 'YYYY-MM-DD'). Default is '2000-01-01'.
-            if 'all', will retrieve all data.
-
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame containing daily CRSP data with columns:
-            ['permco', 'permno', 'date', 'prc', 'ret', 'vol', 'shrout', 'cfacpr', 'cfacshr']
-        """
-        # Ensure required directories exist
-        os.makedirs('data', exist_ok=True)
-        os.makedirs('data/crsp', exist_ok=True)
-
-        if year == 'all':
-            year_condition = ""
-        else:
-            year_condition = f"AND a.date >= '{year}-01-01' AND a.date <= '{year}-12-31'"
-
-        if permno_list is not None:
-            permno_str = 'a.permno IN ('+', '.join(str(permno) for permno in permno_list)+')'
-        else:
-            permno_str = "1=1"
-
-        if start_year is not None:
-            start_year_condition = f"AND a.date >= '{start_year}-01-01'"
-        else:
-            start_year_condition = ""
-
-        sql = f"""
-            SELECT
-                a.permco,        
-                a.permno,
-                a.date,
-                a.prc,
-                a.ret,
-                a.vol,
-                a.shrout,
-                a.cfacpr,
-                a.cfacshr,
-                a.hsiccd,
-                a.openprc
-            FROM crsp.dsf a
-            WHERE 
-                {permno_str}
-                {year_condition}
-                {start_year_condition}
-            ORDER BY a.date;
-        """
-
-        # Execute query and save result to a Parquet part file
-        df = self.db.raw_sql(sql)
-        return df
+        return pricevol_df
 
     def permco_gvkey_link(self):
         """
         Get table mapping Compustat GVKEYs to CRSP PERMCOs and PERMNOs.
 
-        Parameters
-        ----------
-        db : database connection
-
         Returns
         -------
         pandas.DataFrame
-            Link table with GVKEY, PERMNO, PERMCO, etc.
+            Link table with GVKEY, iid, PERMNO, PERMCO, etc.
         """
-        sql = """
-        SELECT gvkey, liid, linkdt, COALESCE(linkenddt, '2059-12-31') as linkenddt, lpermno, lpermco, linkprim
-        FROM crsp.ccmxpf_linktable
-        WHERE linktype IN ('LU', 'LC')   -- standard links (LU = link to common, LC = link to company)
-        AND linkprim IN ('P', 'J', 'C')     -- primary links (P = primary, C = company)
-        AND lpermno IS NOT NULL   
-        """
-        
-        link_df = self.db.raw_sql(sql).rename(columns={'lpermno': 'permno', 'lpermco': 'permco'})
-        link_df['permno'] = link_df['permno'].astype(int)
-        link_df['permco'] = link_df['permco'].astype(int)
+        sql = env.get_template("link_table/ccmxpf_linktable.sql.j2").render()
+        link_df = self.db.raw_sql(sql)
         return link_df
-
 
     def marketcap_calculator(self, gvkey_list=None):
         """
@@ -332,187 +194,27 @@ class WRDSManager():
             sneak_peek(crsp_df)
         return crsp_df
 
-    def get_sp500_constituents(self):
-        """
-        Get SP500 list from CRSP. with link table and gic sector.
-        """
-        sql = """
-        SELECT a.*
-        , link_df.gvkey
-        , link_df.linkdt
-        , link_df.linkenddt
-        , gic_sector_df.gsector
-        , gic_sector_df.indfrom
-        , gic_sector_df.indthru
-
-        FROM crsp.msp500list AS a
-
-        JOIN (
-            SELECT gvkey,
-                liid,
-                linkdt,
-                COALESCE(linkenddt, '2059-12-31') AS linkenddt,
-                lpermno as permno,
-                lpermco as permco,
-                linkprim
-            FROM crsp.ccmxpf_linktable
-            WHERE linktype IN ('LU', 'LC')         -- standard links
-            AND linkprim IN ('P', 'J', 'C')      -- primary links
-            AND lpermno IS NOT NULL
-        ) AS link_df
-        ON a.permno = link_df.permno
-
-        JOIN (
-            select co_hgic.gsector
-            , co_hgic.gvkey
-            , co_hgic.indfrom
-            , COALESCE(co_hgic.indthru, '2059-12-31') AS indthru
-            from comp.co_hgic as co_hgic
-            where indtype = 'GICS'
-        ) AS gic_sector_df
-        ON link_df.gvkey = gic_sector_df.gvkey
-
-        WHERE 
-        ending < linkenddt + INTERVAL '1 year';
-        """
-        return self.db.raw_sql(sql)
-
-
     def get_sp500_constituents_snapshot(self, year):
         """
         Get SP500 list from CRSP. with link table and gic sector. at a given year.
         """
-        sql = f"""
-        SELECT a.*
-        , link_df.gvkey
-        , link_df.linkdt
-        , link_df.linkenddt
-        , gic_sector_df.gsector
-        , gic_sector_df.indfrom
-        , gic_sector_df.indthru
-
-        FROM crsp.msp500list AS a
-
-        JOIN (
-            SELECT gvkey,
-                liid,
-                linkdt,
-                COALESCE(linkenddt, '2059-12-31') AS linkenddt,
-                lpermno as permno,
-                lpermco as permco,
-                linkprim
-            FROM crsp.ccmxpf_linktable
-            WHERE linktype IN ('LU', 'LC')         -- standard links
-            AND linkprim IN ('P', 'J', 'C')      -- primary links
-            AND lpermno IS NOT NULL
-        ) AS link_df
-        ON a.permno = link_df.permno
-
-        JOIN (
-            select co_hgic.gsector
-            , co_hgic.gvkey
-            , co_hgic.indfrom
-            , COALESCE(co_hgic.indthru, '2059-12-31') AS indthru
-            from comp.co_hgic as co_hgic
-            where indtype = 'GICS'
-        ) AS gic_sector_df
-        ON link_df.gvkey = gic_sector_df.gvkey
-
-        WHERE 
-        ending < linkenddt + INTERVAL '1 year'
-        AND
-        ending > '{year}-01-01'
-        AND 
-        start <= '{year}-01-01'
-        AND 
-        '{year}-01-01' >= indfrom
-        AND
-        '{year}-01-01' < indthru
-        ;
-        """
+        template = env.get_template("sp500/sp500_constituents.sql.j2")
+        sql = template.render(year=year)
         return self.db.raw_sql(sql)
 
 
-    def get_raven_full_equities(self, year=2024, relevance_threshold=75, event_similarity_days_threshold=90):
-        sql = f"""
-            SELECT
-                agg.*,
-                map.cusip,
-                ds.ticker,
-                ds.namedt,
-                ds.nameendt,
-                ds.permco
-            FROM (
-                SELECT
-                    raven.rp_entity_id,
-                    raven.country_code,
-                    -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
-                    CASE
-                        WHEN (
-                            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                        )::time >= TIME '16:00:00'
-                        THEN (
-                            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                        )::date + INTERVAL '1 day'
-                        ELSE (
-                            ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                        )::date
-                    END AS trading_day_et,
-                    COUNT(raven.event_sentiment_score) AS event_count,
-                    AVG(raven.event_sentiment_score) AS mean_ess,
-                    AVG(raven.bmq) AS mean_bmq,
-                    AVG(raven.bee) AS mean_bee,
-                    AVG(raven.bam) AS mean_bam,
-                    AVG(raven.bca) AS mean_bca,
-                    AVG(raven.css) AS mean_css,
-                    AVG(raven.ber) AS mean_ber
-                FROM rpna.rpa_full_equities_{year} raven
-                WHERE raven.entity_type = 'COMP'
-                    AND raven.country_code = 'US'
-                    AND raven.event_sentiment_score IS NOT NULL
-                    AND raven.relevance >= {relevance_threshold}
-                    AND raven.event_similarity_days >= {event_similarity_days_threshold}
-                GROUP BY
-                    raven.rp_entity_id,
-                    raven.country_code,
-                    trading_day_et
-            ) agg
-            LEFT JOIN rpna.wrds_all_mapping map
-                ON agg.rp_entity_id = map.rp_entity_id
-            LEFT JOIN crsp.dsenames ds
-                ON LEFT(UPPER(REGEXP_REPLACE(map.cusip, '[^A-Z0-9]', '', 'g')), 8) = ds.cusip
-                AND agg.trading_day_et >= ds.namedt
-                AND agg.trading_day_et <= ds.nameendt
-            ORDER BY agg.trading_day_et, ds.ticker;
-        """
-        return self.db.raw_sql(sql).dropna(subset=['permco']).drop_duplicates(subset=['trading_day_et', 'permco'])
+    def get_raven_full_equities(self, year=2024, relevance_threshold=75, event_similarity_days_threshold=90, permno_list=None):
+        sql = env.get_template("ravenpack/rp_equities.sql.j2").render(
+            year=year, 
+            relevance_threshold=relevance_threshold, 
+            event_similarity_days_threshold=event_similarity_days_threshold,
+            permno_list=permno_list)
+        return self.db.raw_sql(sql).dropna(subset=['permco', 'permno'], how='any').drop_duplicates(subset=['trading_day_et', 'permco', 'permno'])
 
 
-    def get_raven_global_macro(self, year=2024, relevance_threshold=75, event_similarity_days_threshold=90, us=True):
-
-        sql = f"""
-            SELECT
-                -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
-                CASE
-                    WHEN (
-                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                    )::time >= TIME '16:00:00'
-                    THEN (
-                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                    )::date + INTERVAL '1 day'
-                    ELSE (
-                        ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
-                    )::date
-                END AS trading_day_et,
-                CASE WHEN raven.country_code = 'US' THEN 'US' ELSE 'RoW' END AS us_bucket,
-                COUNT(*)      AS event_count,
-                AVG(raven.event_sentiment_score)      AS mean_ess
-            FROM rpna.rpa_full_global_macro_{year} AS raven
-            WHERE raven.entity_type = 'PLCE'
-                AND raven.event_sentiment_score IS NOT NULL
-                AND raven.relevance >= {relevance_threshold}
-                AND raven.event_similarity_days >= {event_similarity_days_threshold}
-            GROUP BY trading_day_et, us_bucket
-            ORDER BY trading_day_et, us_bucket;
-        """
+    def get_raven_global_macro(self, year=2024, relevance_threshold=75, event_similarity_days_threshold=90):
+        sql = env.get_template("ravenpack/rp_macro.sql.j2").render(
+            year=year, 
+            relevance_threshold=relevance_threshold, 
+            event_similarity_days_threshold=event_similarity_days_threshold)
         return self.db.raw_sql(sql)

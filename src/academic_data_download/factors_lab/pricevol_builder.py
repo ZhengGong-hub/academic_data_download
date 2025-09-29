@@ -42,22 +42,26 @@ class PriceVolComputer():
         """
         Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
         """
-        df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/{name}.parquet', permno_list=self.permno_list)
+        df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/pricevol_raw.parquet', permno_list=self.permno_list)
+        print("Converting date column to datetime...")
         df['date'] = pd.to_datetime(df['date'])
+        print("Calculating adjusted close price...")
         df['adjclose'] = df['prc'] / df['cfacpr']
 
-        # get the ret by aggregation of col: ret 
+        print("Calculating 1-year cumulative return (including dividends)...")
         df['cum_ret_1y'] = df.groupby(['permno'])['ret'].transform(
             lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
         )
+        print("Calculating 1-year forward return (including dividends)...")
         df['fwd_ret_1y'] = df.groupby(['permno'])['cum_ret_1y'].transform(
             lambda x: x.shift(-252)
         )
 
-        # exclude dividends ret 
+        print("Calculating 1-year cumulative return (excluding dividends)...")
         df['cum_ret_1y_excl_div'] = df.groupby(['permno'])['retx'].transform(
             lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
         )
+        print("Calculating 1-year forward return (excluding dividends)...")
         df['fwd_ret_1y_excl_div'] = df.groupby(['permno'])['cum_ret_1y_excl_div'].transform(
             lambda x: x.shift(-252)
         )

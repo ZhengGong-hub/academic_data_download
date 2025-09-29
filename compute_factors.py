@@ -7,7 +7,7 @@ import pandas as pd
 dotenv.load_dotenv()
 
 # hyperparameters
-FACTOR_PATH = 'data/factors'
+FACTOR_PATH = 'data/factors/single_factor'
 
 # connect to db
 db = connect_wrds(username=os.getenv("WRDS_USERNAME"), password=os.getenv("WRDS_PASSWORD"))
@@ -18,7 +18,7 @@ gvkey_list = ['001690',
     ] # berkshire and apple, CAT
 gvkey_list = None
 
-FactorComputer = FactorBuilder(gvkey_list=gvkey_list, verbose=True, db=db)
+FactorComputer = FactorBuilder(gvkey_list=gvkey_list, verbose=True, db=db, save_path=FACTOR_PATH)
 
 FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 # FactorComputer.sales_to_price(qtr=True, name='f_sp')
@@ -53,7 +53,3 @@ FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 # FactorComputer.financial_constraints(qtr=True, name='f_fc')
 # FactorComputer.book_scaled_asset_liquidity(qtr=True, name='f_bsal')
 # FactorComputer.market_scaled_asset_liquidity(qtr=True, name='f_msal')
-
-# # ravenpack
-# FactorComputer.ravenpack_equities(name=f'f_rp_ess', start_year=2009, end_year=2025)
-# FactorComputer.ravenpack_global_macro(name=f'f_rp_global_macro', start_year=2009, end_year=2025)

@@ -1,0 +1,15 @@
+SELECT
+    gvkey,
+    liid AS iid,
+    linkdt,
+    COALESCE(linkenddt, '2059-12-31') AS linkenddt,
+    lpermno AS permno,
+    lpermco AS permco,
+    linkprim
+FROM crsp.ccmxpf_linktable
+WHERE
+    linktype IN ('LU', 'LC')      -- standard links (LU = link to common, LC = link to company)
+    AND linkprim IN ('P', 'J', 'C')   -- primary links (P = primary, C = company)
+    AND lpermno IS NOT NULL
+    AND lpermco IS NOT NULL
+    AND gvkey IS NOT NULL

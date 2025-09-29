@@ -1,0 +1,53 @@
+SELECT
+    agg.*,
+    map.cusip,
+    ds.ticker,
+    ds.namedt,
+    ds.nameendt,
+    ds.permco,
+    ds.permno
+FROM (
+    SELECT
+        raven.rp_entity_id,
+        raven.country_code,
+        -- Convert UTC to US/Eastern and assign trading day: post-4:00 pm ET → next day
+        CASE
+            WHEN (
+                ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+            )::time >= TIME '16:00:00'
+            THEN (
+                ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+            )::date + INTERVAL '1 day'
+            ELSE (
+                ((raven.rpa_date_utc + raven.rpa_time_utc) AT TIME ZONE 'UTC') AT TIME ZONE 'US/Eastern'
+            )::date
+        END AS trading_day_et,
+        COUNT(raven.event_sentiment_score) AS event_count,
+        AVG(raven.event_sentiment_score) AS mean_ess,
+        AVG(raven.bmq) AS mean_bmq,
+        AVG(raven.bee) AS mean_bee,
+        AVG(raven.bam) AS mean_bam,
+        AVG(raven.bca) AS mean_bca,
+        AVG(raven.css) AS mean_css,
+        AVG(raven.ber) AS mean_ber
+    FROM rpna.rpa_full_equities_{{ year }} raven
+    WHERE raven.entity_type = 'COMP'
+        AND raven.country_code = 'US'
+        AND raven.event_sentiment_score IS NOT NULL
+        AND raven.relevance >= {{ relevance_threshold }}
+        AND raven.event_similarity_days >= {{ event_similarity_days_threshold }}
+    GROUP BY
+        raven.rp_entity_id,
+        raven.country_code,
+        trading_day_et
+) agg
+LEFT JOIN rpna.wrds_all_mapping map
+    ON agg.rp_entity_id = map.rp_entity_id
+LEFT JOIN crsp.dsenames ds
+    ON LEFT(UPPER(REGEXP_REPLACE(map.cusip, '[^A-Z0-9]', '', 'g')), 8) = ds.cusip
+    AND agg.trading_day_et >= ds.namedt
+    AND agg.trading_day_et <= ds.nameendt
+    {% if permno_list %}
+    AND ds.permno IN ({{ permno_list | join(', ') }})
+    {% endif %}
+ORDER BY agg.trading_day_et, ds.ticker;

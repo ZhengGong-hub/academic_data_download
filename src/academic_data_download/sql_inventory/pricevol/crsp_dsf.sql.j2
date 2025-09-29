@@ -13,10 +13,14 @@ SELECT
     a.openprc
 FROM crsp.dsf a
 WHERE
+    1 = 1 
     {% if permno_list %}
-    a.permno IN ({{ permno_list | join(', ') }})
+    AND a.permno IN ({{ permno_list | join(', ') }})
     {% endif %}
     {% if start_date %}
     AND a.date >= '{{ start_date }}'
+    {% endif %}
+    {% if crop_by_year %}
+    AND a.date >= '{{ crop_by_year }}-01-01' AND a.date <= '{{ crop_by_year }}-12-31'
     {% endif %}
 ORDER BY a.date;
