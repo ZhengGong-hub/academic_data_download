@@ -55,7 +55,7 @@ class AnalystEstimationBuilder():
         return df
 
     @analyst_estimator
-    def price_target_detail(self, name='price_target'):
+    def price_target_detail(self, name='price_target_detail'):
         """
         """
         df = self.wrds_manager.get_price_target_detail(permno_list=self.permno_list)

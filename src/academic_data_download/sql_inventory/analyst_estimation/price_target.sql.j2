@@ -1,36 +1,49 @@
+WITH ibes_clean AS (
+  SELECT
+      a.ticker,
+      a.estimid,
+      a.alysnam,
+      a.value,
+      a.cusip,
+      a.amaskcd,
+      (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) AS ann_ts,
+      (a.actdats::date + COALESCE(a.acttims::time, TIME '00:00:00')) AS act_ts,
+      a.usfirm,
+      a.horizon,
+      a.measure,
+      a.curr,
+      a.estcur
+  FROM ibes.ptgdetu a
+)
 SELECT
-    a.ticker,
-    a.actdats,
-    a.estimid,
-    a.alysnam,
-    a.value,
-    a.cusip,
-    a.amaskcd,
-    a.acttims,
-    a.anndats,
-    a.anntims,
+    i.ticker,
+    i.estimid,
+    i.alysnam,
+    i.value,
+    i.cusip,
+    i.amaskcd,
+    i.ann_ts AS ann,     -- announcement time stamp
+    i.act_ts AS act,     -- record time stamp
     ds.namedt,
     ds.nameendt,
     ds.permco,
     ds.permno
-FROM ibes.ptgdetu a
+FROM ibes_clean i
 LEFT JOIN crsp.dsenames ds
-    ON a.cusip = ds.cusip
+  ON i.cusip = ds.cusip
+  AND i.ann_ts::date >= ds.namedt
+  AND i.ann_ts::date <= coalesce(ds.nameendt, DATE '2099-12-31')
 WHERE
-    1 = 1
-    AND a.usfirm = 1
-    AND a.ANNDATS >= DATE '2000-01-01'
+    i.usfirm = 1
+    AND i.horizon = '12'          -- 12-month price target
+    AND i.measure = 'PTG'         -- Price Target
+    AND i.curr = 'USD'
+    AND i.estcur = 'USD'
+    AND i.ann_ts::date >= DATE '2000-01-01'
+    AND i.act_ts >= i.ann_ts      -- record time not before announcement time
+    AND ds.permno IS NOT NULL
+    AND ds.permco IS NOT NULL
     {% if permno_list %}
     AND ds.PERMNO IN ({{ permno_list | join(', ') }})
     {% endif %}
-    AND
-    a.horizon = '12' -- 12 months
-    AND
-    a.measure = 'PTG' -- represents the target price
-    AND
-    a.curr = 'USD'
-    AND
-    a.estcur = 'USD'
-    AND a.anndats >= ds.namedt
-    AND a.anndats <= ds.nameendt
-ORDER BY a.ANNDATS;
+ORDER BY i.ann_ts;

@@ -16,7 +16,7 @@ permno_list = None
 #     ]
 
 AnalystEstimationBuilder = AnalystEstimationBuilder(permno_list=permno_list, verbose=True, db=db)
-AnalystEstimationBuilder.price_target_summary(name='price_target_summary')
+# AnalystEstimationBuilder.price_target_summary(name='price_target_summary')
 AnalystEstimationBuilder.price_target_detail(name='price_target_detail')
 
 
