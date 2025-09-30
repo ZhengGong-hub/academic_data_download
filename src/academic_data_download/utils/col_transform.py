@@ -18,6 +18,10 @@ def shift_n_rows(df, col, row):
 
 def merge_mktcap_fundq(mktcap_df, fund_df):
     fund_df.sort_values(by=['rdq', 'gvkey'], inplace=True)
+    mktcap_df['date'] = pd.to_datetime(mktcap_df['date'])
+    mktcap_df['gvkey'] = mktcap_df['gvkey'].astype(str)
+    fund_df['rdq'] = pd.to_datetime(fund_df['rdq'])
+    fund_df['gvkey'] = fund_df['gvkey'].astype(str)
     return pd.merge_asof(mktcap_df, fund_df.dropna(subset=['rdq']), left_on=['date'], right_on=['rdq'], by=['gvkey'], direction='backward')
 
 

@@ -98,7 +98,7 @@ class PriceVolComputer():
         mktcap_df.rename(columns={'marketcap_permno': 'marketcap'}, inplace=True)
         
         # round to integer
-        mktcap_df['marketcap'] = mktcap_df['marketcap'].astype(int)
+        mktcap_df['marketcap'] = mktcap_df['marketcap'].astype(int) / 1000 # in millions (default record in thousands)
 
         # merge with link table
         mktcap_df = merge_permco_gvkey_link(mktcap_df, permco_gvkey_link_df)

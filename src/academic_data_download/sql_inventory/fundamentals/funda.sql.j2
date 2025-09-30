@@ -12,6 +12,6 @@ AND f.curncd = 'USD' -- US dollars as native currency of reporting only
 AND f.fyear >= {{ start_year }}
 AND f.datadate IS NOT NULL
 {% if gvkey_list %}
-AND f.gvkey IN ({{ gvkey_list | join(', ') }})
+AND f.gvkey IN ('{{ gvkey_list | join("','") }}')
 {% endif %}
 ORDER BY f.datadate ASC

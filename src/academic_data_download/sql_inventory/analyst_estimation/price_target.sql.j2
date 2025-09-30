@@ -8,6 +8,12 @@ WITH ibes_clean AS (
       a.amaskcd,
       (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) AS ann_ts,
       (a.actdats::date + COALESCE(a.acttims::time, TIME '00:00:00')) AS act_ts,
+      -- if ann_ts is after 4pm, then count it to next day
+      CASE
+          WHEN (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::time >= TIME '16:00:00'
+          THEN ((a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) + INTERVAL '1 day')::date
+          ELSE (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::date
+      END AS ann_deemed_date,
       a.usfirm,
       a.horizon,
       a.measure,
@@ -24,6 +30,7 @@ SELECT
     i.amaskcd,
     i.ann_ts AS ann,     -- announcement time stamp
     i.act_ts AS act,     -- record time stamp
+    i.ann_deemed_date,
     ds.namedt,
     ds.nameendt,
     ds.permco,

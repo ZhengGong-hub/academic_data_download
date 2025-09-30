@@ -8,7 +8,7 @@ os.makedirs('data/factors/combined', exist_ok=True)
 
 factor_addrs = glob.glob('data/factors/single_factor/*.parquet')
 
-mktcap_df = pd.read_parquet('data/crsp/marketcap.parquet')
+mktcap_df = pd.read_parquet('data/pricevol/marketcap.parquet')
 print(mktcap_df.head())
 
 for addr in factor_addrs:

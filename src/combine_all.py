@@ -9,7 +9,7 @@ import glob
 
 # hyperparameters
 start_year = 2010
-pricevol_path = 'data/crsp/crsp_daily_processed.parquet'
+pricevol_path = 'data/pricevol/pricevol_processed.parquet'
 ravenpack_equities_path = 'data/ravenpack/f_rp_ess.parquet'
 ravenpack_global_macro_path = 'data/ravenpack/f_rp_global_macro.parquet'
 factors_path = 'data/factors/combined/factors_combined.parquet'
@@ -115,6 +115,7 @@ df = pd.merge(df, ravenpack_global_macro_df_us, on=['trading_day_et'], how='left
 print("  Merging with RavenPack global macro RoW...")
 df = pd.merge(df, ravenpack_global_macro_df_row, on=['trading_day_et'], how='left')
 print("  Final merged dataframe preview:")
+print("the shape of the dataframe is: ", df.shape)
 print(df.head())
 
 print(f"Step 7: Saving combined data to {combined_path} ...")

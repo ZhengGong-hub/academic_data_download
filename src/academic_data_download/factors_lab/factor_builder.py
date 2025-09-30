@@ -9,6 +9,7 @@ from academic_data_download.utils.save_file import save_file
 from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
 from academic_data_download.utils.sneak_peek import sneak_peek
 from academic_data_download.utils.col_transform import rolling_sum, fill_forward, merge_mktcap_fundq, fillna_with_0, merge_funda_rdq, shift_n_rows, merge_funda_fundq
+from academic_data_download.factors_lab.pricevol_builder import PriceVolComputer
 
 def factor(fn: Callable) -> Callable:
     """
@@ -45,6 +46,12 @@ class FactorBuilder():
         self.gvkey_list = gvkey_list
         self.wrds_manager = WRDSManager(db, verbose=verbose)
         self.save_path = save_path
+        pvc = PriceVolComputer(permno_list=None, verbose=False, db=db)
+        mktcap_df = pvc.marketcap(name='marketcap')
+        if self.gvkey_list is not None:
+            self.mktcap_df = mktcap_df.query('gvkey in @gvkey_list')
+        else:
+            self.mktcap_df = mktcap_df
 
     @factor
     def gross_profit_to_assets(self, qtr=True, name='f_gpta'):
@@ -77,12 +84,10 @@ class FactorBuilder():
 
             fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
 
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-
             # merge the fund_df and price_df
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['saleq_ltm'] / mktcap_df['marketcap']
-        return mktcap_df
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['saleq_ltm'] / res_df['marketcap']
+        return res_df
 
     @factor
     def btm(self, qtr=True, name='f_btm'):
@@ -93,7 +98,7 @@ class FactorBuilder():
         """
         if qtr:
             # seqq: Stockholders' Equity - Total, txditcc: deferred income tax, pstk: preferred stock
-            fund_df = self.wrds_manager.get_fundq(fund_list=["seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
+            fund_df = self.wrds_manager.get_fundq(fund_list=["seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list)
 
             # forward fill
             for col in ['txditcq', 'pstkq', 'seqq']:
@@ -102,10 +107,9 @@ class FactorBuilder():
             fund_df['be'] = fund_df['seqq'] + fund_df['txditcq'] - fund_df['pstkq']
 
             # get marketcap
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['be'] / mktcap_df['marketcap']
-        return mktcap_df
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['be'] / res_df['marketcap']
+        return res_df
 
     @factor
     def debt_to_market(self, qtr=True, name='f_dtm'):
@@ -114,7 +118,7 @@ class FactorBuilder():
         Total Debt = Long Term Debt + Total Current Debt
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["dlttq", "dlcq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # dlttq: long term debt, dlcq: total current debt
+            fund_df = self.wrds_manager.get_fundq(fund_list=["dlttq", "dlcq"], gvkey_list=self.gvkey_list) # dlttq: long term debt, dlcq: total current debt
             
             # fillna with 0
             fund_df['dlcq'] = fill_forward(fund_df, 'dlcq')
@@ -122,10 +126,9 @@ class FactorBuilder():
 
             fund_df['total_debt'] = fund_df['dlttq'] + fund_df['dlcq']
 
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['total_debt'] / mktcap_df['marketcap']
-        return mktcap_df
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['total_debt'] / res_df['marketcap']
+        return res_df
 
     @factor
     def earnings_to_price(self, qtr=True, name='f_ep'):
@@ -134,13 +137,12 @@ class FactorBuilder():
         Earnings / Market Cap
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # ibq: Income Before Extraordinary Items
+            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq"], gvkey_list=self.gvkey_list) # ibq: Income Before Extraordinary Items
             fund_df['ibq_ltm'] = rolling_sum(fund_df, 'ibq')
 
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['ibq_ltm'] / mktcap_df['marketcap']
-        return mktcap_df
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['ibq_ltm'] / res_df['marketcap']
+        return res_df
 
     @factor
     def cashflow_to_price(self, qtr=True, name='f_cfp'):
@@ -152,17 +154,16 @@ class FactorBuilder():
         """
         if qtr:
             # ibq: income before extraordinary items, dpq: depreciation and amortization
-            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "dpq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "dpq"], gvkey_list=self.gvkey_list) 
 
             fund_df['dpq'] = fillna_with_0(fund_df, 'dpq')
             fund_df['cashflow'] = fund_df['ibq'] + fund_df['dpq']
             fund_df['cashflow_ltm'] = rolling_sum(fund_df, 'cashflow')
 
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['cashflow_ltm'] / mktcap_df['marketcap']
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['cashflow_ltm'] / res_df['marketcap']
 
-        return mktcap_df
+        return res_df
 
     @factor
     def payout_yield(self, qtr=True, name='f_py'):
@@ -174,7 +175,7 @@ class FactorBuilder():
         """
         if qtr:
             # dvpsxq: cash dividends paid per share, cshoq: common shares outstanding, cshopq: common shares outstanding repurchased, prcraq: price to book ratio
-            fund_df = self.wrds_manager.get_fundq(fund_list=["dvpsxq", "cshoq", "cshopq", "prcraq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
+            fund_df = self.wrds_manager.get_fundq(fund_list=["dvpsxq", "cshoq", "cshopq", "prcraq"], gvkey_list=self.gvkey_list)
 
             fund_df['dvpsxq'] = fillna_with_0(fund_df, 'dvpsxq')
             fund_df['cshopq'] = fillna_with_0(fund_df, 'cshopq')
@@ -188,11 +189,10 @@ class FactorBuilder():
             fund_df['payout_ltm'] = rolling_sum(fund_df, 'payout')
 
             # get market cap
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['payout_ltm'] / mktcap_df['marketcap']
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['payout_ltm'] / res_df['marketcap']
 
-        return mktcap_df
+        return res_df
 
     @factor
     def ev_multiple(self, qtr=True, name='f_evm'):
@@ -202,7 +202,7 @@ class FactorBuilder():
         """
         if qtr:
             # dlttq: long term debt, dlcq: total current debt, mibtq: noncontrolling intrest, cheq: cash and equivalents, pstkq: preferred stock
-            fund_df = self.wrds_manager.get_fundq(fund_list=["dlttq", "dlcq", "mibtq", "cheq", "pstkq", "oibdpq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["dlttq", "dlcq", "mibtq", "cheq", "pstkq", "oibdpq"], gvkey_list=self.gvkey_list) 
 
             fund_df['dlttq'] = fill_forward(fund_df, 'dlttq')
             fund_df['dlcq'] = fill_forward(fund_df, 'dlcq')
@@ -212,12 +212,11 @@ class FactorBuilder():
 
             fund_df['ebitda_ltm'] = rolling_sum(fund_df, 'oibdpq')
 
-            mktcap = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap = merge_mktcap_fundq(mktcap, fund_df)
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
 
-            mktcap['ev'] = mktcap['marketcap'] + mktcap['dlttq'] + mktcap['dlcq'] + mktcap['mibtq'] - mktcap['cheq'] + mktcap['pstkq'] 
-            mktcap[name] = mktcap['ev'] / mktcap['ebitda_ltm']
-        return mktcap
+            res_df['ev'] = res_df['marketcap'] + res_df['dlttq'] + res_df['dlcq'] + res_df['mibtq'] - res_df['cheq'] + res_df['pstkq'] 
+            res_df[name] = res_df['ev'] / res_df['ebitda_ltm']
+        return res_df
 
     @factor
     def advertising_to_marketcap(self, qtr=True, name='f_adp'):
@@ -233,18 +232,16 @@ class FactorBuilder():
         18  001690 2018-09-30   2018     0.0 2018-11-01
         """
         if not qtr:
-            fund_df = self.wrds_manager.get_funda(fund_list=["xad"], gvkey_list=self.gvkey_list, verbose=self.verbose) # adpq: advertising expenses
-            _merge_on_rdq_date = self.wrds_manager.get_fundq(fund_list=["ibq"], gvkey_list=self.gvkey_list, verbose=self.verbose)[['gvkey', 'rdq', 'datadate']] # adpq: advertising expenses
+            fund_df = self.wrds_manager.get_funda(fund_list=["xad"], gvkey_list=self.gvkey_list) # adpq: advertising expenses
+            _merge_on_rdq_date = self.wrds_manager.get_fundq(fund_list=["ibq"], gvkey_list=self.gvkey_list)[['gvkey', 'rdq', 'datadate']] # adpq: advertising expenses
             fund_df = merge_funda_rdq(fund_df, _merge_on_rdq_date)
             # TODO wrap up this part nicer 
 
             fund_df['xad'] = fillna_with_0(fund_df, 'xad')
 
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = self.wrds_manager.merge_mktcap_fundq(mktcap_df, fund_df)
-            mktcap_df[name] = mktcap_df['xad'] / mktcap_df['marketcap']
-
-        return mktcap_df
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['xad'] / res_df['marketcap']
+        return res_df
 
     @factor
     def rd_to_marketcap(self, qtr=True, name='f_rdp'):
@@ -253,14 +250,13 @@ class FactorBuilder():
         Research and Development expenses / Market Cap
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["xrdq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # xrdq: research and development expenses
+            fund_df = self.wrds_manager.get_fundq(fund_list=["xrdq"], gvkey_list=self.gvkey_list) # xrdq: research and development expenses
             fund_df['xrdq'] = fillna_with_0(fund_df, 'xrdq')
             fund_df['xrdq_ltm'] = rolling_sum(fund_df, 'xrdq')
 
-            mktcap = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap = merge_mktcap_fundq(mktcap, fund_df)
-            mktcap[name] = mktcap['xrdq_ltm'] / mktcap['marketcap']
-        return mktcap
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
+            res_df[name] = res_df['xrdq_ltm'] / res_df['marketcap']
+        return res_df
 
     @factor
     def operating_leverage(self, qtr=True, name='f_ol'):
@@ -272,7 +268,7 @@ class FactorBuilder():
         """
         if qtr:
             # xsgaq: selling, general and administrative expenses, cogsq: cost of goods sold
-            fund_df = self.wrds_manager.get_fundq(fund_list=["xsgaq", "cogsq", "atq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["xsgaq", "cogsq", "atq"], gvkey_list=self.gvkey_list) 
 
             fund_df['xsgaq'] = fillna_with_0(fund_df, 'xsgaq')
             fund_df['cogsq'] = fillna_with_0(fund_df, 'cogsq')
@@ -291,7 +287,7 @@ class FactorBuilder():
         Income Before Extraordinary Items / Total Assets
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "atq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # ibq: income before extraordinary items, atq: total assets
+            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "atq"], gvkey_list=self.gvkey_list) # ibq: income before extraordinary items, atq: total assets
             fund_df['atq'] = fill_forward(fund_df, 'atq')
 
             fund_df['ibq_ltm'] = rolling_sum(fund_df, 'ibq')
@@ -306,7 +302,7 @@ class FactorBuilder():
         Ranked from 1 to 10 by the sales growth rate, cross-sectional
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list, verbose=self.verbose)  # saleq: sales
+            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list)  # saleq: sales
             
             # Get lagged sale variable
             fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
@@ -317,15 +313,13 @@ class FactorBuilder():
             # drop na
             fund_df = fund_df.dropna()
 
-            # TODO: we dont want marketcap, but we want the tradingdate, i.e. the col "date"
-            mktcap_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+            # we dont want marketcap, but we want the tradingdate, i.e. the col "date"
+            res_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
 
             # groupby date to assign cagr into 10 classes (1-10, deciles)
-            mktcap_df[name] = mktcap_df.groupby('date')['five_year_sales_cagr'] \
+            res_df[name] = res_df.groupby('date')['five_year_sales_cagr'] \
                 .transform(lambda x: pd.qcut(x.rank(method='first'), 10, labels=False, duplicates='drop') + 1)
-
-        return mktcap_df
+        return res_df
 
     @factor
     def abnormal_capital_investment(self, qtr=True, name='f_aci'):
@@ -336,11 +330,11 @@ class FactorBuilder():
         """
         if qtr:
             # capx: capital expenditure, saleq: sales
-            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
-            fund_df_annual = self.wrds_manager.get_funda(fund_list=["capx"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list)
+            fund_df_annual = self.wrds_manager.get_funda(fund_list=["capx"], gvkey_list=self.gvkey_list) 
 
             # Merge both data frames
-            fund_df = self.wrds_manager.merge_funda_fundq(fund_df_quarter, fund_df_annual)
+            fund_df = merge_funda_fundq(fund_df_quarter, fund_df_annual)
             
             # Get variables from past four quarters
             fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
@@ -369,7 +363,7 @@ class FactorBuilder():
         See Cooper et al. (2008)
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["atq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # atq: total assets
+            fund_df = self.wrds_manager.get_fundq(fund_list=["atq"], gvkey_list=self.gvkey_list) # atq: total assets
             fund_df['atq'] = fill_forward(fund_df, 'atq')
 
             # Calculate investment to assets using current and lagged assets
@@ -385,7 +379,7 @@ class FactorBuilder():
         Change in property, plant, and equipment, and inventory, scaled by assets
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["invtq", "atq", "ppegtq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # invtq: inventories, atq: total assets, ppegtq: property, plant, and equipment
+            fund_df = self.wrds_manager.get_fundq(fund_list=["invtq", "atq", "ppegtq"], gvkey_list=self.gvkey_list) # invtq: inventories, atq: total assets, ppegtq: property, plant, and equipment
 
             fund_df['invtq'] = fill_forward(fund_df, 'invtq')
             fund_df['ppegtq'] = fill_forward(fund_df, 'ppegtq')
@@ -408,8 +402,8 @@ class FactorBuilder():
         """
         if qtr:
             # capx: capital expenditure
-            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # note: we just want to get the rdq column
-            fund_df_annual = self.wrds_manager.get_funda(fund_list=["capx"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["saleq"], gvkey_list=self.gvkey_list) # note: we just want to get the rdq column
+            fund_df_annual = self.wrds_manager.get_funda(fund_list=["capx"], gvkey_list=self.gvkey_list) 
 
             # Merge both data frames
             fund_df = merge_funda_rdq(fund_df_annual, fund_df_quarter)
@@ -430,7 +424,7 @@ class FactorBuilder():
         See Thomas & Zhang (2002)
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["invtq", "atq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # invtq: inventory, atq: total assets
+            fund_df = self.wrds_manager.get_fundq(fund_list=["invtq", "atq"], gvkey_list=self.gvkey_list) # invtq: inventory, atq: total assets
             fund_df['invtq'] = fill_forward(fund_df, 'invtq')
             fund_df['atq'] = fill_forward(fund_df, 'atq')
 
@@ -440,9 +434,7 @@ class FactorBuilder():
 
             # Calculate inventory change
             fund_df[name] = (fund_df['invtq'] - fund_df['invtq_lag']) / (0.5 * (fund_df['atq'] + fund_df['atq_lag']))
-
             return fund_df
-
 
     @factor
     def operating_accruals(self, qtr=True, name='f_oa'):
@@ -457,7 +449,7 @@ class FactorBuilder():
             _to_retrieve = ["actq", "atq", "cheq", "lctq", "dlcq", "txpq", "dpq"]
             # actq: current assets, atq: total assets, cheq: cash and cash equivalents, lctq: current liabilities, 
             # dlcq: short-term debt, txpq: income taxes payable, dpq: depreciation and amortization
-            fund_df = self.wrds_manager.get_fundq(fund_list=_to_retrieve, gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=_to_retrieve, gvkey_list=self.gvkey_list) 
 
             # Get lagged values (4 quarters ago)
             for col in _to_retrieve:
@@ -474,7 +466,6 @@ class FactorBuilder():
             # Calculate operating accruals
             denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
             fund_df[name] = ((delta_ca - delta_cash) - (delta_cl - delta_std - delta_tp) - fund_df["dpq"]) / denom
-
             return fund_df
 
     @factor
@@ -489,11 +480,11 @@ class FactorBuilder():
             # actq: current assets, atq: total assets, cheq: cash and cash equivalents, lctq: current liabilities, dlcq: short-term debt, ivao: investments and advances, ltq: total liabilities, dlttq: long-term debt, ivstq: short-term investments, pstkq: preferred stock
             _to_retrieve = ["actq", "atq", "cheq", "lctq", "dlcq", "ltq", "dlttq", "ivstq", "pstkq"]
 
-            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=_to_retrieve, gvkey_list=self.gvkey_list, verbose=self.verbose)
-            fund_df_annual = self.wrds_manager.get_funda(fund_list=["ivao"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=_to_retrieve, gvkey_list=self.gvkey_list)
+            fund_df_annual = self.wrds_manager.get_funda(fund_list=["ivao"], gvkey_list=self.gvkey_list) 
 
             # Merge both data frames
-            fund_df = self.wrds_manager.merge_funda_fundq(fund_df_quarter, fund_df_annual)
+            fund_df = merge_funda_fundq(fund_df_quarter, fund_df_annual)
 
             # Get lagged values (4 quarters ago)
             lag_cols = _to_retrieve + ["ivao"]
@@ -512,7 +503,6 @@ class FactorBuilder():
             # Calculate total accruals
             denom = 0.5 * (fund_df['atq'] + fund_df['atq_lag'])
             fund_df[name] = ((delta_coaq - delta_colq) + (delta_ncoaq - delta_ncolq) + (delta_finaq - delta_finlq)) / denom
-
             return fund_df
 
     @factor
@@ -525,11 +515,11 @@ class FactorBuilder():
             # sstk: sale of common and preferred stocks, atq: total assets, prstkc: purchase of common and preferred stocks, 
             # dvpsxq: cash dividends paid per share, cshoq: number of common shares outstanding, dltis: cash inflow issuance long-term debt, 
             # dltr: cash outflow reduction long-term debt, dlcch: change in current debt
-            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["atq", "dvpsxq", "cshoq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
-            fund_df_annual = self.wrds_manager.get_funda(fund_list=["prstkc", "sstk", "dltis", "dltr", "dlcch"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df_quarter = self.wrds_manager.get_fundq(fund_list=["atq", "dvpsxq", "cshoq"], gvkey_list=self.gvkey_list)
+            fund_df_annual = self.wrds_manager.get_funda(fund_list=["prstkc", "sstk", "dltis", "dltr", "dlcch"], gvkey_list=self.gvkey_list) 
 
             # Merge both data frames
-            fund_df = self.wrds_manager.merge_funda_fundq(fund_df_quarter, fund_df_annual)
+            fund_df = merge_funda_fundq(fund_df_quarter, fund_df_annual)
 
             # for c/f term we fill na with 0
             for col in ['sstk', 'dvpsxq', 'prstkc', 'dltis', 'dltr', 'dlcch']:
@@ -557,7 +547,6 @@ class FactorBuilder():
 
             # Calculate net external finance
             fund_df[name] = (fund_df['delta_equity'] + fund_df['delta_debt']) / (0.5*(fund_df["atq"] + fund_df["atq_lag"]))
-
             return fund_df
 
     @factor
@@ -575,7 +564,7 @@ class FactorBuilder():
         if qtr:            
             # oiadpq: operating income before interest, atq: total assets, cheq: cash and short-term investments, 
             # dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
-            fund_df = self.wrds_manager.get_fundq(fund_list=["oiadpq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
+            fund_df = self.wrds_manager.get_fundq(fund_list=["oiadpq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"], gvkey_list=self.gvkey_list)
             
             # Get current and lagged values
             fund_df['oiadpq_ltm'] = rolling_sum(fund_df, 'oiadpq') # an income term
@@ -602,7 +591,7 @@ class FactorBuilder():
         See Soliman (2008)
         """
         if qtr:
-            fund_df = self.wrds_manager.get_fundq(fund_list=["oiadpq", "saleq"], gvkey_list=self.gvkey_list, verbose=self.verbose) # oiadpq: operating income before interest, saleq: sales
+            fund_df = self.wrds_manager.get_fundq(fund_list=["oiadpq", "saleq"], gvkey_list=self.gvkey_list) # oiadpq: operating income before interest, saleq: sales
 
             # Get current values
             fund_df['oiadpq_ltm'] = rolling_sum(fund_df, 'oiadpq')
@@ -621,7 +610,7 @@ class FactorBuilder():
         """
         if qtr:
             # saleq: sales, atq: total assets, cheq: cash, ivao: short-term investments, dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
-            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq", "atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"], gvkey_list=self.gvkey_list) 
             
             # Get current and lagged values
             fund_df['saleq_ltm'] = rolling_sum(fund_df, 'saleq')
@@ -649,7 +638,7 @@ class FactorBuilder():
         if qtr:
             # saleq: sales, cogsq: cost of goods sold, xsgaq: general and administrative expenses, 
             # xintq: interest expense, seqq: total equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq", "cogsq", "xsgaq", "xintq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list, verbose=self.verbose)
+            fund_df = self.wrds_manager.get_fundq(fund_list=["saleq", "cogsq", "xsgaq", "xintq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list)
             
             # Get current and lagged values
             # Calculate last twelve months (LTM) sums for relevant columns
@@ -673,14 +662,13 @@ class FactorBuilder():
         """
         if qtr:
             # atq: total assets, seqq: total equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = self.wrds_manager.get_fundq(fund_list=["atq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["atq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list) 
             
             for col in ['txditcq', 'pstkq']:
                 fund_df[col] = fill_forward(fund_df, col)
 
             # Calculate book leverage
             fund_df[name] = fund_df["atq"] / (fund_df["seqq"] + fund_df["txditcq"] - fund_df["pstkq"])
-
         return fund_df
     
     @factor
@@ -693,7 +681,7 @@ class FactorBuilder():
         if qtr:
             # ibq: income before extraordinary items, prstkcq: purchase of common and preferred stocks, dvpsxq: cash dividends paid per share, dpq: depreciation and amorization, 
             # ppentq: property, plant, and equipment, atq: total assets, ceq: common equity, txdbq: deferred taxes, dlttq: long-term debt, dlcq: debt in current liabilities, seqq: stockholder equity, dvpq: preferred dividends, cheq: cash and short-term investments
-            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "dpq", "ppentq", "atq", "seqq", "txdbq", "dlttq", "dlcq", "ceqq", "dvpsxq", "cshoq", "dvpq", "cheq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["ibq", "dpq", "ppentq", "atq", "seqq", "txdbq", "dlttq", "dlcq", "ceqq", "dvpsxq", "cshoq", "dvpq", "cheq"], gvkey_list=self.gvkey_list) 
             
             # total cash dividends
             fund_df['dvpsxq'] = fillna_with_0(fund_df, 'dvpsxq')
@@ -712,8 +700,7 @@ class FactorBuilder():
             fund_df['ppentq_lag'] = shift_n_rows(fund_df, 'ppentq', 4)     
 
             # Load market cap
-            price_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            price_df = merge_mktcap_fundq(price_df, fund_df)
+            price_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
             
             # Calculate single ratios
             price_df["cash_flow_to_capital"] = (price_df['ibq_ltm'] + price_df['dpq_ltm']) / price_df['ppentq_lag']
@@ -736,7 +723,7 @@ class FactorBuilder():
         """
         if qtr:
             # cheq: cash and short-term investments, atq: total assets, actq: current assets, ppentq: property, plant, and equipment
-            fund_df = self.wrds_manager.get_fundq(fund_list=["cheq", "atq", "actq", "ppentq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["cheq", "atq", "actq", "ppentq"], gvkey_list=self.gvkey_list) 
             
             # Get current values
             for col in ['actq', 'ppentq', 'atq', 'cheq']:
@@ -756,15 +743,14 @@ class FactorBuilder():
         """
         if qtr:
             # cheq: cash and short-term investments, atq: total assets, actq: non-cash current assets, ppentq: property, plant, and equipment, ceqq: common equity, txditcq: deferred taxes and investment tax credit, pstkq: preferred stock
-            fund_df = self.wrds_manager.get_fundq(fund_list=["cheq", "atq", "actq", "ppentq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list, verbose=self.verbose) 
+            fund_df = self.wrds_manager.get_fundq(fund_list=["cheq", "atq", "actq", "ppentq", "seqq", "txditcq", "pstkq"], gvkey_list=self.gvkey_list) 
             
             # Get current values
             for col in ["actq", "ppentq", "atq", "cheq", "seqq", "txditcq", "pstkq"]:
                 fund_df[col] = fill_forward(fund_df, col)
 
             # Get market cap
-            price_df = self.wrds_manager.marketcap_calculator(gvkey_list=self.gvkey_list)
-            price_df = merge_mktcap_fundq(price_df, fund_df)
+            price_df = merge_mktcap_fundq(self.mktcap_df, fund_df)
 
             # Calculate market assets
             price_df["book_equity"] = price_df["seqq"] + price_df["txditcq"] - price_df["pstkq"]
@@ -773,5 +759,4 @@ class FactorBuilder():
             # Calculate market-scaled asset liquidity
             denom = price_df["market_assets"]    
             price_df[name] = -(price_df["cheq"]/denom + 0.75*(price_df["actq"] - price_df["cheq"])/denom + 0.50*price_df["ppentq"]/denom)
-
         return price_df
