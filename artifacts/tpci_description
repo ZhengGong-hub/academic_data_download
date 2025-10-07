@@ -1,0 +1,31 @@
+| Code | Description                                                                                                   |
+|------|--------------------------------------------------------------------------------------------------------------|
+| 0    | Common, ordinary                                                                                             |
+| 1    | Preferred, preference, etc.                                                                                  |
+| 2    | Warrant or right                                                                                             |
+| 3    | Convertible bond                                                                                             |
+| 4    | Unit - an issue that is comprised of a combination of common shares and warrants                             |
+| 5    | Municipal dollar or taxable bond                                                                             |
+| 6    | Corporate or government bond                                                                                 |
+| 7    | Mutual or investment trust fund                                                                              |
+| 8    | Certificate                                                                                                  |
+| A    | Market index                                                                                                |
+| B    | Equity or index option                                                                                       |
+| C    | Commodity or financial future                                                                                |
+| D    | Currency, futures, or futures options                                                                        |
+| E    | Unit investment trust (UIT)                                                                                  |
+| F    | Depositary Receipt – (Including American Depositary Receipt (ADR), Global Depositary Receipt (GDR) and other |
+|      | Depositary Receipts).                                                                                        |
+| G    | Convertible preferred                                                                                        |
+| H    | U.S. Treasury Note                                                                                           |
+| I    | U.S. Treasury Bond                                                                                           |
+| J    | U.S. Treasury Bill                                                                                           |
+| K    | Federal Home Loan Bank                                                                                       |
+| L    | Federal Home Loan Mortgage Corporation (FHLMC) debenture                                                     |
+| Q    | Special Stock                                                                                                |
+| R    | Structured Product                                                                                           |
+| S    | American Depository Receipt (ADR) Preferred                                                                  |
+| Z    | Other Government/Agency: U.S. Postal Service, Tennessee Valley Authority, Student Loan, etc.                 |
+| $    | Asset-backed security or CMO                                                                                 |
+| %    | Exchange Traded Fund                                                                                         |
+| +    | Open End Fund                                                                                                |

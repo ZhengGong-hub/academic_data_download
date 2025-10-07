@@ -1,1 +1,22 @@
 -- to do in the future
+select 
+a.tic,
+a.datadate,
+a.cshtrd,
+a.cshoc,
+a.prccd,
+a.tpci, -- issue type code
+a.curcdd,
+a.exchg
+from 
+comp.secd a
+where
+1=1 
+-- AND tic = 'PYPL'
+AND datadate = '2025-10-03'
+-- limit 50
+AND prccd is not null
+AND tpci = '0' -- common stock
+AND curcdd = 'USD'
+AND exchg in (11, 12, 14) -- NYSE, AMEX, NASDAQ
+;

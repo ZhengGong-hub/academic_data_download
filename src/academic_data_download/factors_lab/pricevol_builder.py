@@ -103,3 +103,18 @@ class PriceVolComputer():
         # merge with link table
         mktcap_df = merge_permco_gvkey_link(mktcap_df, permco_gvkey_link_df)
         return mktcap_df
+    
+    @pricevol
+    def live_pricevol(self, name='live_pricevol'):
+        # get link table
+        df = self.wrds_manager.get_secd_daily()
+        df['turnover'] = (df['cshtrd'] / df['cshoc'] * 100).round(2) # in percentage
+        df['dvol'] = (df['prccd'] * df['cshtrd'] / 1e9).round(2) # in billions
+        df['mktcap'] = (df['prccd'] * df['cshoc'] / 1e9).round(2) # in billions
+
+        # moving averages 
+        # TODO
+
+        print(df.query('mktcap > 10 and turnover > 5 and tpci != "%" and prccd > 10 and prccd < 150'))
+        # print(df.sort_values("mktcap", ascending=False).head(50))
+        assert False

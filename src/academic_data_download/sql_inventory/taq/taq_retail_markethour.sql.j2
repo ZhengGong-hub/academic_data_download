@@ -1,0 +1,42 @@
+SELECT 
+  a.date,
+  a.sym_root,
+  a.sym_suffix,
+
+  COUNT(*) AS no,
+  SUM(CASE WHEN (a.price - a.nbb) > 0.6 * (a.nbo - a.nbb) THEN 1 ELSE 0 END)                 AS nob,
+  SUM(CASE WHEN (a.price - a.nbb) < 0.4 * (a.nbo - a.nbb) THEN 1 ELSE 0 END)                 AS nos,
+
+  SUM(a.size) AS s,
+  SUM(CASE WHEN (a.price - a.nbb) > 0.6 * (a.nbo - a.nbb) THEN a.size ELSE 0 END)            AS sb,
+  SUM(CASE WHEN (a.price - a.nbb) < 0.4 * (a.nbo - a.nbb) THEN a.size ELSE 0 END)            AS ss,
+
+  ROUND(SUM(a.size * a.price) / 1000000.0, 3) AS v,
+  ROUND(SUM(CASE WHEN (a.price - a.nbb) > 0.6 * (a.nbo - a.nbb) THEN a.size * a.price ELSE 0 END) / 1000000.0, 3) AS vb,
+  ROUND(SUM(CASE WHEN (a.price - a.nbb) < 0.4 * (a.nbo - a.nbb) THEN a.size * a.price ELSE 0 END) / 1000000.0, 3) AS vs
+
+FROM taqm_{{year}}.wct_{{date}} a
+WHERE
+    a.time_m > TIME '09:30:00'
+AND a.time_m < TIME '16:00:00'
+AND a.type = 'T'
+AND (a.tr_scond IS NULL OR a.tr_scond !~ '[OQ6M]')
+AND a.ex = 'D'
+AND a.nbo IS NOT NULL AND a.nbo > 0
+AND a.nbb IS NOT NULL AND a.nbb > 0
+AND (a.nbo - a.nbb) > 0
+AND a.size > 0
+{% if retail_cutoff_upper %}
+AND a.size * a.price < {{ retail_cutoff_upper }}
+{% endif %}
+{% if retail_cutoff_lower %}
+AND a.size * a.price >= {{ retail_cutoff_lower }}
+{% endif %}
+AND ABS(a.price*100 - ROUND(a.price*100)) > 1e-6
+-- AND a.sym_root in ('AAPL')
+
+{% if sym_root_list %}
+AND a.sym_root IN ('{{ sym_root_list | join("','") }}')
+{% endif %}
+
+GROUP BY a.date, a.sym_root, a.sym_suffix;

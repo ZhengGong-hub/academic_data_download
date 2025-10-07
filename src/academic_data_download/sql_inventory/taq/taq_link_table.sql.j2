@@ -1,0 +1,21 @@
+
+SELECT 
+link.date,
+link.sym_root,
+link.sym_suffix,
+link.permno
+FROM wrdsapps.taqmclink link
+WHERE 
+1 = 1 
+{% if date %}
+and link.date = '{{ date }}'
+{% endif %}
+{% if permno_list %}
+AND link.permno IN ({{ permno_list | join(', ') }})
+{% endif %}
+{% if symbol_root %}
+AND link.sym_root IN ('{{ symbol_root | join("','") }}')
+{% endif %}
+{% if start_date%}
+and link.date >= '{{ start_date }}'
+{% endif %}

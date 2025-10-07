@@ -1,0 +1,58 @@
+WITH raw AS (
+  SELECT 
+    a.date,
+    a.time_m,
+    a.sym_root,
+    a.sym_suffix,
+    a.price,
+    a.size,
+    -- (a.nbo + a.nbb) / 2.0                 AS midpoint,
+    (a.nbo - a.nbb)                       AS spread,
+    (a.price - a.nbb)                   AS tradelocation_nom
+  FROM taqm_2024.wct_20241231 a
+  WHERE 
+    a.time_m > TIME '09:30:00'
+    AND a.time_m < TIME '16:00:00'
+    AND a.type = 'T'                                    -- trade record
+    AND (a.tr_scond IS NULL OR a.tr_scond !~ '[OQ6M]')  -- exclude open/close prints
+    AND a.ex = 'D'                                      -- off-exchange
+    AND a.nbo IS NOT NULL AND a.nbo > 0
+    AND a.nbb IS NOT NULL AND a.nbb > 0
+    AND (a.nbo - a.nbb) > 0                             -- positive spread
+    AND a.size > 0
+    AND a.size * a.price < 100000
+    -- AND (100*mod(a.price, 0.01) NOT IN (0, 1))            -- drop penny-edge prints
+    AND ABS(price*100-ROUND(price*100))>1e-6                -- drop penny-edge prints FAST
+    {% if sym_root_list %}
+    AND a.sym_root IN ('{{ sym_root_list | join("','") }}')
+    {% endif %}
+),
+signed AS (
+  SELECT
+    *,
+    (tradelocation_nom > 0.6 * spread)::int                              AS bx,
+    (tradelocation_nom < 0.4 * spread)::int                              AS sx
+  FROM raw
+)
+SELECT 
+  date,
+  sym_root,
+  sym_suffix,
+
+  -- total number of orders bought and sold 
+  COUNT(*)       AS no, -- total rows after filters
+  SUM(bx)        AS nob,      -- # buys
+  SUM(sx)        AS nos,      -- # sells
+
+  -- total shares bought and sold 
+  SUM(size)      AS s,     -- total shares
+  SUM(bx * size) AS sb,     -- total shares bought
+  SUM(sx * size) AS ss,     -- total shares sold
+
+  -- total value bought and sold 
+  sum(size * price) AS v, -- total value sold and bought
+  SUM(bx * size * price) AS vb,     -- total value bought
+  SUM(sx * size * price) AS vs     -- total value sold
+
+FROM signed
+GROUP BY date, sym_root, sym_suffix;

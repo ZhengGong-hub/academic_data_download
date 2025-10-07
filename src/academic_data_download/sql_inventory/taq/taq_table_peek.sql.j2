@@ -1,0 +1,25 @@
+
+  SELECT 
+    a.date,
+    a.time_m,
+    a.sym_root,
+    a.sym_suffix,
+    a.price,
+    a.size,
+    (a.nbo + a.nbb) / 2.0                 AS midpoint,
+    (a.nbo - a.nbb)                       AS spread,
+    (a.price - a.nbb) / (a.nbo - a.nbb)   AS tradelocation
+  FROM taqm_2015.wct_20150105 a
+  WHERE 
+    a.time_m > TIME '09:30:00'
+    AND a.time_m < TIME '16:00:00'
+    AND a.sym_root in ('AMZN')
+    AND a.type = 'T'                                    -- trade record
+    AND (a.tr_scond IS NULL OR a.tr_scond !~ '[OQ6M]')  -- exclude open/close prints
+    AND a.ex = 'D'                                      -- off-exchange
+    AND a.nbo IS NOT NULL AND a.nbo > 0
+    AND a.nbb IS NOT NULL AND a.nbb > 0
+    AND (a.nbo - a.nbb) > 0                             -- positive spread
+    AND a.size < 100
+    AND a.size * a.price < 100000
+    AND (100*mod(a.price, 0.01) NOT IN (0, 1))            -- drop penny-edge prints

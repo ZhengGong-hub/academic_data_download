@@ -92,6 +92,14 @@ class WRDSManager():
         for col in fund_list:
             df[col] = df[col].astype(float).round(3) # the fund list value should have precision of 3
         return df
+    
+    def get_secd_daily(self):
+        """
+        Get daily SEC data from Compustat SECD.
+        """
+        sql = env.get_template("pricevol/comp_secd.sql.j2").render()
+        df = self.db.raw_sql(sql)
+        return df
 
     def get_crsp_daily(
             self, 
@@ -203,4 +211,26 @@ class WRDSManager():
             year=year, 
             relevance_threshold=relevance_threshold, 
             event_similarity_days_threshold=event_similarity_days_threshold)
+        return self.db.raw_sql(sql)
+
+    def get_taq_peek(self):
+        sql = env.get_template("taq/taq_lib_peek.sql.j2").render()
+        return self.db.raw_sql(sql)
+
+    def get_taq_tables(self):
+        sql = env.get_template("taq/taq_table_peek.sql.j2").render()
+        return self.db.raw_sql(sql)
+    
+    def get_taq_retail_markethour(self, date='2021-12-31', sym_root_list=None, retail_cutoff_upper=100000, retail_cutoff_lower=0):
+        sql = env.get_template("taq/taq_retail_markethour.sql.j2").render(
+            year=date.split('-')[0], 
+            date=date.replace('-', ''), 
+            sym_root_list=sym_root_list, 
+            retail_cutoff_upper=retail_cutoff_upper, 
+            retail_cutoff_lower=retail_cutoff_lower
+        )
+        return self.db.raw_sql(sql)
+    
+    def get_taq_link_table(self, date='2021-12-31', permno_list=None, symbol_root=None, start_date='2013-01-01'):
+        sql = env.get_template("taq/taq_link_table.sql.j2").render(date=date, permno_list=permno_list, symbol_root=symbol_root, start_date=start_date)
         return self.db.raw_sql(sql)

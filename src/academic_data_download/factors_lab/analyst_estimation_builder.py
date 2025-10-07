@@ -27,7 +27,7 @@ def analyst_estimator(fn: Callable) -> Callable:
         print("dealing with: ", nm)
         if not check_if_calculation_needed(nm, self.permno_list, self.save_path):
             print("Already computed. Done with: ", nm)
-            return
+            return pd.read_parquet(f'{self.save_path}/{nm}.parquet')
         df = fn(self, *args, **kwargs)
         if not isinstance(df, pd.DataFrame):
             raise ValueError(f"{fn.__name__} must return a DataFrame, got {type(df)}")
@@ -36,7 +36,7 @@ def analyst_estimator(fn: Callable) -> Callable:
             sneak_peek(df)
         if self.permno_list is None:
             save_file(df, nm, path=self.save_path)
-        return
+        return df
     return wrapper
 
 
