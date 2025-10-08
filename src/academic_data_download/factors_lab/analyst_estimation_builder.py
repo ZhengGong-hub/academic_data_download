@@ -60,3 +60,21 @@ class AnalystEstimationBuilder():
         """
         df = self.wrds_manager.get_price_target_detail(permno_list=self.permno_list)
         return df
+
+    @analyst_estimator
+    def price_target_detail_revision(self, name='price_target_detail_revision'):
+        """
+        """
+        df = self.price_target_detail().dropna(subset=['value'])
+        df['value'] = df['value'].astype(float)
+
+        df['analyst_coverage_id'] = df['permno'].astype(str) + '_' + df['amaskcd'].astype(str)
+
+        # have a column to record initial price target to differentiate from price target revision 
+        # if the pair [permno, amaskcd] show up the first time, the column value of revision to 0, otherwise to 1
+        df = df.sort_values(['analyst_coverage_id', 'ann_deemed_date'])
+        df['revision'] = (
+            df.groupby('analyst_coverage_id').cumcount()
+        )
+        df['last_pt'] = df.groupby('analyst_coverage_id')['value'].transform(lambda x: x.shift(1))
+        return df
