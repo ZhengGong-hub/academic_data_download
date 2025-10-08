@@ -57,30 +57,23 @@ if False:
     pricevol = pricevol[pricevol['date'] >= f'{start_year}-01-01']
     
     taq_df = pd.merge(taq_df, pricevol, left_on=['permno', 'date'], right_on=['permno', 'date'], how='left')
-
-    taq_df['n_net'] = round((taq_df['nob'] - taq_df['nos']) / (taq_df['nob'] + taq_df['nos']), 3)
-    taq_df['s_net'] = round((taq_df['sb'] - taq_df['ss']) / (taq_df['sb'] + taq_df['ss']), 3)
-    taq_df['v_net'] = round((taq_df['vb'] - taq_df['vs']) / (taq_df['vb'] + taq_df['vs']), 3)
-    taq_df['retail_magnitude'] = 1e6 * (taq_df['sb'] - taq_df['ss']) / taq_df['vol']
-
+    taq_df['vol'] = round(taq_df['vol']/1000, 0) # in thousands
 
     taq_df['full_name'] = taq_df['sym_root'] + taq_df['sym_suffix']
-    for _day in range(1, 23):
-        # taq_df[f'nob_in_{_day}d'] = taq_df.groupby('full_name')['nob'].transform(lambda x: x.shift(-_day))
-        # taq_df[f'nos_in_{_day}d'] = taq_df.groupby('full_name')['nos'].transform(lambda x: x.shift(-_day))
+    for _day in list(range(-5, 23)) + [-66, -22, 66, 132, 198, 252]:
+        taq_df[f'no_in_{_day}d'] = taq_df.groupby('full_name')['no'].transform(lambda x: x.shift(-_day))
+        taq_df[f'nob_in_{_day}d'] = taq_df.groupby('full_name')['nob'].transform(lambda x: x.shift(-_day))
+        taq_df[f'nos_in_{_day}d'] = taq_df.groupby('full_name')['nos'].transform(lambda x: x.shift(-_day))
 
-        # taq_df[f'sb_in_{_day}d'] = taq_df.groupby('full_name')['sb'].transform(lambda x: x.shift(-_day))
-        # taq_df[f'ss_in_{_day}d'] = taq_df.groupby('full_name')['ss'].transform(lambda x: x.shift(-_day))
+        taq_df[f's_in_{_day}d'] = taq_df.groupby('full_name')['s'].transform(lambda x: x.shift(-_day))
+        taq_df[f'sb_in_{_day}d'] = taq_df.groupby('full_name')['sb'].transform(lambda x: x.shift(-_day))
+        taq_df[f'ss_in_{_day}d'] = taq_df.groupby('full_name')['ss'].transform(lambda x: x.shift(-_day))
         
+        # taq_df[f'v_in_{_day}d'] = taq_df.groupby('full_name')['v'].transform(lambda x: x.shift(-_day))
         # taq_df[f'vb_in_{_day}d'] = taq_df.groupby('full_name')['vb'].transform(lambda x: x.shift(-_day))
         # taq_df[f'vs_in_{_day}d'] = taq_df.groupby('full_name')['vs'].transform(lambda x: x.shift(-_day))
         
-        # taq_df[f'vol_in_{_day}d'] = taq_df.groupby('full_name')['vol'].transform(lambda x: x.shift(-_day))
-
-        taq_df[f'n_net_in_{_day}d'] = taq_df.groupby('full_name')['n_net'].transform(lambda x: x.shift(-_day))
-        taq_df[f's_net_in_{_day}d'] = taq_df.groupby('full_name')['s_net'].transform(lambda x: x.shift(-_day))
-        taq_df[f'v_net_in_{_day}d'] = taq_df.groupby('full_name')['v_net'].transform(lambda x: x.shift(-_day))
-        taq_df[f'retail_magnitude_in_{_day}d'] = taq_df.groupby('full_name')['retail_magnitude'].transform(lambda x: x.shift(-_day))
+        taq_df[f'vol_in_{_day}d'] = taq_df.groupby('full_name')['vol'].transform(lambda x: x.shift(-_day))
 
     print(taq_df.query('sym_root == "AAPL"'))
     taq_df.to_parquet("data/combined/taq_temp.parquet")
@@ -88,7 +81,6 @@ if False:
 
 
 
-print("Step 3: Loading price/volume data...")
 # load pricevol
 price_target_all_data = pd.read_parquet(price_target_all_data_path)
 price_target_all_data = price_target_all_data.query(f"trading_day_et >= '{start_year}-01-01'")
@@ -110,14 +102,3 @@ print(taq_df.columns)
 price_target_all_data = pd.merge(price_target_all_data, taq_df, left_on=['permno', 'ann_deemed_date'], right_on=['permno', 'date'], how='inner')
 print(price_target_all_data)
 price_target_all_data.to_parquet('data/combined/price_target_all_data_with_taq.parquet')
-assert False
-
-print("Step 6: Merging all data sources...")
-# combine all the data into one file
-print("  Merging pricevol and taq...")
-print(pricevol_df)
-assert False
-
-print(f"Step 7: Saving combined data to {combined_path} ...")
-df.to_parquet(combined_path)
-print(f'Saved to {combined_path}')

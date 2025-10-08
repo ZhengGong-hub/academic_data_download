@@ -58,25 +58,28 @@ class PriceVolComputer():
         print("Converting date column to datetime...")
         df['date'] = pd.to_datetime(df['date'])
         print("Calculating adjusted close price...")
-        df['adjclose'] = df['prc'] / df['cfacpr']
+        df['adjclose'] = round(df['prc'] / df['cfacpr'], 3)
+        df['ret'] = round(df['ret'], 4)
+        df['retx'] = round(df['retx'], 4)
 
-        print("Calculating 1-year cumulative return (including dividends)...")
-        df['cum_ret_1y'] = df.groupby(['permno'])['ret'].transform(
-            lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
-        )
-        print("Calculating 1-year forward return (including dividends)...")
-        df['fwd_ret_1y'] = df.groupby(['permno'])['cum_ret_1y'].transform(
-            lambda x: x.shift(-252)
-        )
+        for _day in [252, 5, 126, 22, 1]:
+            print(f"Calculating {_day}-day cumulative return (including dividends)...")
+            df[f'cum_ret_{_day}d'] = round(df.groupby(['permno'])['ret'].transform(
+                lambda x: x.rolling(window=_day).apply(lambda y: np.prod(1 + y) - 1)
+            ), 4)
+            print(f"Calculating {_day}-day forward return (including dividends)...")
+            df[f'fwd_ret_{_day}d'] = round(df.groupby(['permno'])[f'cum_ret_{_day}d'].transform(
+                lambda x: x.shift(-_day)
+            ), 4)
 
-        print("Calculating 1-year cumulative return (excluding dividends)...")
-        df['cum_ret_1y_excl_div'] = df.groupby(['permno'])['retx'].transform(
-            lambda x: x.rolling(window=252).apply(lambda y: np.prod(1 + y) - 1)
-        )
-        print("Calculating 1-year forward return (excluding dividends)...")
-        df['fwd_ret_1y_excl_div'] = df.groupby(['permno'])['cum_ret_1y_excl_div'].transform(
-            lambda x: x.shift(-252)
-        )
+            print(f"Calculating {_day}-day cumulative return (excluding dividends)...")
+            df[f'cum_ret_{_day}d_excl_div'] = round(df.groupby(['permno'])['retx'].transform(
+                lambda x: x.rolling(window=_day).apply(lambda y: np.prod(1 + y) - 1)
+            ), 4)
+            print(f"Calculating {_day}-day forward return (excluding dividends)...")
+            df[f'fwd_ret_{_day}d_excl_div'] = round(df.groupby(['permno'])[f'cum_ret_{_day}d_excl_div'].transform(
+                lambda x: x.shift(-_day)
+            ), 4)
 
         # merge with link table
         df = merge_link_table_crsp(crsp_df=df, link_df=permco_gvkey_link_df)
