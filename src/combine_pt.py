@@ -28,9 +28,8 @@ if __name__ == "__main__":
     all_data['permno'] = all_data['permno'].astype(int)
     all_data['permco'] = all_data['permco'].astype(int)
     all_data.dropna(subset=['permco', 'permno', 'trading_day_et'], how='any', inplace=True)
-    print(all_data.head())
-
     all_data.sort_values(by='trading_day_et', inplace=True)
+    print(all_data.head())
 
     # Load and preprocess the price target summary data
     price_target_summary = pd.read_parquet('../data/analysts_estimate/price_target_summary.parquet')

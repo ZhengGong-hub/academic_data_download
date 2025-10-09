@@ -67,7 +67,7 @@ class AnalystEstimationBuilder():
         """
         df = self.price_target_detail().dropna(subset=['value'])
         df['value'] = df['value'].astype(float)
-
+        # pair id of company covered + analyst id
         df['analyst_coverage_id'] = df['permno'].astype(str) + '_' + df['amaskcd'].astype(str)
 
         # have a column to record initial price target to differentiate from price target revision 

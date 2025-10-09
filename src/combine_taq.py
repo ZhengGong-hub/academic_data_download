@@ -62,6 +62,7 @@ if __name__ == "__main__":
     print("Step 1: Loading taq data...")
     taq_df = pd.read_parquet(taq_path).sort_values(by=['date'])
     taq_df['date'] = pd.to_datetime(taq_df['date'])
+    taq_df.sort_values(by=['date'], inplace=True)
     taq_df['sym_suffix'] = taq_df['sym_suffix'].fillna('')
     taq_df['full_name'] = taq_df['sym_root'] + taq_df['sym_suffix']
 
@@ -82,10 +83,10 @@ if __name__ == "__main__":
     pricevol = pd.read_parquet(pricevol_path)[['permno', 'date', 'vol']]
     pricevol['date'] = pd.to_datetime(pricevol['date'])
     pricevol = pricevol[pricevol['date'] >= f'{start_year}-01-01']
+    pricevol['vol'] = round(pricevol['vol']/1000, 0)  # Convert volume to thousands
 
     taq_df = pd.merge(taq_df, pricevol, left_on=['permno', 'date'], right_on=['permno', 'date'], how='left')
-    taq_df['vol'] = round(taq_df['vol']/1000, 0)  # Convert volume to thousands
-
+    
     # Step 4: Compute shifted TAQ and volume features for various time windows
     for _day in list(range(-5, 23)) + [-66, -22, 66, 132, 198, 252]:
         taq_df[f'no_in_{_day}d'] = taq_df.groupby('full_name')['no'].transform(lambda x: x.shift(-_day))
