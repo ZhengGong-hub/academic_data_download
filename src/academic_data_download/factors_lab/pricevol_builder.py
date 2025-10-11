@@ -108,9 +108,9 @@ class PriceVolComputer():
         return mktcap_df
     
     @pricevol
-    def live_pricevol(self, name='live_pricevol'):
+    def live_pricevol(self, name='live_pricevol', start_date=None, end_date=None):
         # get link table
-        df = self.wrds_manager.get_secd_daily()
+        df = self.wrds_manager.get_secd_daily(start_date=start_date, end_date=end_date)
         df['turnover'] = (df['cshtrd'] / df['cshoc'] * 100).round(2) # in percentage
         df['dvol'] = (df['prccd'] * df['cshtrd'] / 1e9).round(2) # in billions
         df['mktcap'] = (df['prccd'] * df['cshoc'] / 1e9).round(2) # in billions
@@ -118,6 +118,7 @@ class PriceVolComputer():
         # moving averages 
         # TODO
 
-        print(df.query('mktcap > 10 and turnover > 5 and tpci != "%" and prccd > 10 and prccd < 150'))
+        print(df.query('mktcap > 5 and turnover > 10 and tpci != "%" and prccd > 10 and prccd < 200').sort_values('turnover', ascending=False).head(50))
+        print(df.columns.to_list())
         # print(df.sort_values("mktcap", ascending=False).head(50))
         assert False

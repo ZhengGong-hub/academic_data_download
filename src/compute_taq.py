@@ -15,11 +15,11 @@ permno_list = None
 #     17778, # berkshire class A
 #     ]
 TAQBuilder = TAQBuilder(verbose=True, db=db)
-# TAQBuilder.taq_peek(name='taq_peek')
+TAQBuilder.taq_peek(name='taq_peek', sym_root_list=['BRK'], year=2025, date='20251009')
 # TAQBuilder.taq_tables(name='taq_tables')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2013-01-01', end_date='2016-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2016-12-31', end_date='2019-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2019-12-31', end_date='2021-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2021-12-31', end_date='2022-12-31')
-TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2023-01-01', end_date='2023-12-31')
+# TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2023-01-01', end_date='2023-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2024-01-01', end_date='2024-12-31')

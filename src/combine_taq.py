@@ -102,7 +102,6 @@ if __name__ == "__main__":
     # Step 5: Load detailed price target revision data and filter by date
     print("Step 4: Loading price_target_all_data... ")
     price_target_all_data = pd.read_parquet(price_target_all_data_path)
-    price_target_all_data = price_target_all_data.query(f"trading_day_et >= '{start_year}-01-01'")
     price_target_all_data['ann_deemed_date'] = pd.to_datetime(price_target_all_data['ann_deemed_date'])
     print(f"  Price/volume data loaded from {price_target_all_data_path}.")
     print("price_target_all_data: ", price_target_all_data)

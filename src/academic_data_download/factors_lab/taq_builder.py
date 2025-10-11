@@ -23,11 +23,11 @@ class TAQBuilder():
         self.pricevol_builder = PriceVolComputer(verbose=verbose, db=db, permno_list=[14593])
 
     # -------------------------- TAQ --------------------------
-    def taq_peek(self, name='f_taq_peek', path='data/taq'):
+    def taq_peek(self, name='f_taq_peek', path='data/taq', sym_root_list=None, year=None, date=None):
         """
         TAQ:
         """
-        df = self.wrds_manager.get_taq_peek()
+        df = self.wrds_manager.get_taq_peek(sym_root_list=sym_root_list, year=year, date=date)
         # # keep the column that incldues the word "taq"
         # df = df[df['library'].str.contains('taq', case=False, na=False)]
         # df = df.query('library == "taqm_2025"')

@@ -1,20 +1,13 @@
 -- to do in the future
 select 
-a.tic,
-a.datadate,
-a.cshtrd,
-a.cshoc,
-a.prccd,
-a.tpci, -- issue type code
-a.curcdd,
-a.exchg
+*
 from 
 comp.secd a
 where
 1=1 
 -- AND tic = 'PYPL'
-AND datadate = '2025-10-03'
--- limit 50
+{% if start_date %}AND datadate >= '{{ start_date }}'{% endif %}
+{% if end_date %}AND datadate <= '{{ end_date }}'{% endif %}
 AND prccd is not null
 AND tpci = '0' -- common stock
 AND curcdd = 'USD'

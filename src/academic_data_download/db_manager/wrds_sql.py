@@ -93,11 +93,11 @@ class WRDSManager():
             df[col] = df[col].astype(float).round(3) # the fund list value should have precision of 3
         return df
     
-    def get_secd_daily(self):
+    def get_secd_daily(self, start_date=None, end_date=None):
         """
         Get daily SEC data from Compustat SECD.
         """
-        sql = env.get_template("pricevol/comp_secd.sql.j2").render()
+        sql = env.get_template("pricevol/comp_secd.sql.j2").render(start_date=start_date, end_date=end_date)
         df = self.db.raw_sql(sql)
         return df
 
@@ -213,8 +213,8 @@ class WRDSManager():
             event_similarity_days_threshold=event_similarity_days_threshold)
         return self.db.raw_sql(sql)
 
-    def get_taq_peek(self):
-        sql = env.get_template("taq/taq_lib_peek.sql.j2").render()
+    def get_taq_peek(self, sym_root_list=None, year=None, date=None):
+        sql = env.get_template("taq/taq_lib_peek.sql.j2").render(sym_root_list=sym_root_list, year=year, date=date)
         return self.db.raw_sql(sql)
 
     def get_taq_tables(self):

@@ -67,6 +67,7 @@ class AnalystEstimationBuilder():
         """
         df = self.price_target_detail().dropna(subset=['value'])
         df['value'] = df['value'].astype(float)
+        df.rename(columns={'value': 'pt'}, inplace=True)
         # pair id of company covered + analyst id
         df['analyst_coverage_id'] = df['permno'].astype(str) + '_' + df['amaskcd'].astype(str)
 
@@ -76,5 +77,6 @@ class AnalystEstimationBuilder():
         df['revision'] = (
             df.groupby('analyst_coverage_id').cumcount()
         )
-        df['last_pt'] = df.groupby('analyst_coverage_id')['value'].transform(lambda x: x.shift(1))
+        df['last_pt'] = df.groupby('analyst_coverage_id')['pt'].transform(lambda x: x.shift(1))
+        df['last_ann_deemed_date'] = df.groupby('analyst_coverage_id')['ann_deemed_date'].transform(lambda x: x.shift(1))
         return df
