@@ -80,3 +80,49 @@ class AnalystEstimationBuilder():
         df['last_pt'] = df.groupby('analyst_coverage_id')['pt'].transform(lambda x: x.shift(1))
         df['last_ann_deemed_date'] = df.groupby('analyst_coverage_id')['ann_deemed_date'].transform(lambda x: x.shift(1))
         return df
+
+    @analyst_estimator
+    def eps_detail_qtr(self, name='eps_detail_qtr'):
+        """
+        """
+        df = self.wrds_manager.get_eps_detail(permno_list=self.permno_list, qtr=True, ann=False)
+        return df
+
+    @analyst_estimator
+    def eps_detail_ann(self, name='eps_detail_ann'):
+        """
+        """
+        df = self.wrds_manager.get_eps_detail(permno_list=self.permno_list, qtr=False, ann=True)
+        return df
+
+    @analyst_estimator
+    def pt_detail_with_eps_estimate(self, name='pt_detail_with_eps_estimate'):
+        """
+        """
+        pt_detail = self.price_target_detail_revision().drop(columns=['act', 'namedt', 'nameendt']).sort_values(by=['ann_deemed_date'])
+        pt_detail['ann_deemed_date'] = pd.to_datetime(pt_detail['ann_deemed_date'])
+
+        eps_detail_qtr = self.eps_detail_qtr()
+        eps_detail_qtr['ann_deemed_date'] = pd.to_datetime(eps_detail_qtr['ann_deemed_date'])
+        # q1
+        q1_eps = eps_detail_qtr[eps_detail_qtr['fpi'] == '6'][['permno', 'ann_deemed_date', 'analys', 'value']].rename(columns={'value': 'q1_eps', 'analys': 'amaskcd'})
+        q1_eps['q1_eps_date'] = q1_eps['ann_deemed_date']
+        # q2
+        q2_eps = eps_detail_qtr[eps_detail_qtr['fpi'] == '7'][['permno', 'ann_deemed_date', 'analys', 'value']].rename(columns={'value': 'q2_eps', 'analys': 'amaskcd'})
+        q2_eps['q2_eps_date'] = q2_eps['ann_deemed_date']
+
+        eps_detail_ann = self.eps_detail_ann()
+        eps_detail_ann['ann_deemed_date'] = pd.to_datetime(eps_detail_ann['ann_deemed_date'])
+        # y1
+        y1_eps = eps_detail_ann[eps_detail_ann['fpi'] == '1'][['permno', 'ann_deemed_date', 'analys', 'value']].rename(columns={'value': 'y1_eps', 'analys': 'amaskcd'})
+        y1_eps['y1_eps_date'] = y1_eps['ann_deemed_date']
+        # y2
+        y2_eps = eps_detail_ann[eps_detail_ann['fpi'] == '2'][['permno', 'ann_deemed_date', 'analys', 'value']].rename(columns={'value': 'y2_eps', 'analys': 'amaskcd'})
+        y2_eps['y2_eps_date'] = y2_eps['ann_deemed_date']
+        
+        pt_detail = pd.merge_asof(pt_detail, q1_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
+        pt_detail = pd.merge_asof(pt_detail, q2_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
+        pt_detail = pd.merge_asof(pt_detail, y1_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
+        pt_detail = pd.merge_asof(pt_detail, y2_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
+
+        return pt_detail

@@ -1,0 +1,60 @@
+WITH ibes_clean AS (
+  SELECT
+      a.oftic,
+      a.estimator,
+      a.analys,
+      a.value,
+      a.cusip,
+      a.usfirm,
+      (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) AS ann_ts,
+      (a.actdats::date + COALESCE(a.acttims::time, TIME '00:00:00')) AS act_ts,
+      -- if ann_ts is after 4pm, then count it to next day
+      CASE
+          WHEN (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::time >= TIME '16:00:00'
+          THEN ((a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) + INTERVAL '1 day')::date
+          ELSE (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::date
+      END AS ann_deemed_date,
+      a.fpi,
+      a.measure,
+      a.curr,
+      a.fpedats
+  FROM ibes.ndetu_epsus a
+)
+SELECT
+    i.oftic,
+    i.estimator,
+    i.analys,
+    i.value,
+    i.cusip,
+    i.ann_ts AS ann,     -- announcement time stamp
+    i.act_ts AS act,     -- record time stamp
+    i.ann_deemed_date,
+    i.fpedats,
+    i.fpi,
+    ds.namedt,
+    ds.nameendt,
+    ds.permco,
+    ds.permno
+FROM ibes_clean i
+LEFT JOIN crsp.dsenames ds
+  ON i.cusip = ds.cusip
+  AND i.ann_ts::date >= ds.namedt
+  AND i.ann_ts::date <= coalesce(ds.nameendt, DATE '2099-12-31')
+WHERE
+    i.usfirm = 1
+    AND i.measure = 'EPS'         -- EPS estimates
+    AND i.curr = 'USD'
+    {% if qtr %}
+    AND i.fpi IN ('6', '7', '8', '9', 'N', 'O', 'P', 'Q')
+    {% endif %}
+    {% if ann %}
+    AND i.fpi IN ('1', '2', '3', '4', '5')
+    {% endif %}
+    AND i.ann_ts::date >= DATE '2010-01-01'
+    AND i.act_ts >= i.ann_ts      -- record time not before announcement time
+    AND ds.permno IS NOT NULL
+    AND ds.permco IS NOT NULL
+    {% if permno_list %}
+    AND ds.PERMNO IN ({{ permno_list | join(', ') }})
+    {% endif %}
+ORDER BY i.ann_ts;

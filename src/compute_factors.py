@@ -16,9 +16,11 @@ gvkey_list = ['001690',
     '002176',
     "002817"
     ] # berkshire and apple, CAT
-gvkey_list = None
+# gvkey_list = None
 
 FactorComputer = FactorBuilder(gvkey_list=gvkey_list, verbose=True, db=db, save_path=FACTOR_PATH)
+
+assert False
 
 FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 FactorComputer.sales_to_price(qtr=True, name='f_sp')

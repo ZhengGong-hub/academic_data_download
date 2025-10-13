@@ -53,7 +53,7 @@ if __name__ == "__main__":
     # all_data_with_pt.dropna(subset=['medptg']).to_parquet('../data/combined/all_data_with_pt_summary.parquet')
     if True:
         # Load and preprocess the detailed price target revision data
-        price_target_detail = pd.read_parquet('data/analysts_estimate/price_target_detail_revision.parquet')
+        price_target_detail = pd.read_parquet('data/analysts_estimate/pt_detail_with_eps_estimate.parquet')
         price_target_detail.sort_values(by='ann_deemed_date', inplace=True)
         price_target_detail['permno'] = price_target_detail['permno'].astype(int)
         price_target_detail['permco'] = price_target_detail['permco'].astype(int)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         print("Merging price target detail with all_data using a forward as-of join (within 10 days)...")
         # Merge price target detail with all_data using a forward as-of join (within 10 days)
         price_target_detail_all_data = pd.merge_asof(
-            price_target_detail[['permno', 'permco', 'ann_deemed_date', 'pt', 'revision', 'last_pt', 'last_ann_deemed_date', 'amaskcd']],
+            price_target_detail,
             all_data,
             left_on='ann_deemed_date',
             right_on='trading_day_et',

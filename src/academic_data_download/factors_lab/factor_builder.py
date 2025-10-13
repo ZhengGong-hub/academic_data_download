@@ -48,6 +48,8 @@ class FactorBuilder():
         self.save_path = save_path
         pvc = PriceVolComputer(permno_list=None, verbose=False, db=db)
         mktcap_df = pvc.marketcap(name='marketcap')
+        pricevol_df = pvc.pricevol_processed(name='pricevol_processed')
+
         if self.gvkey_list is not None:
             self.mktcap_df = mktcap_df.query('gvkey in @gvkey_list')
         else:

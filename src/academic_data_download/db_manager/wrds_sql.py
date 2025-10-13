@@ -234,3 +234,7 @@ class WRDSManager():
     def get_taq_link_table(self, date='2021-12-31', permno_list=None, symbol_root=None, start_date='2013-01-01'):
         sql = env.get_template("taq/taq_link_table.sql.j2").render(date=date, permno_list=permno_list, symbol_root=symbol_root, start_date=start_date)
         return self.db.raw_sql(sql)
+
+    def get_eps_detail(self, permno_list=None, qtr=True, ann=True):
+        sql = env.get_template("analyst_estimation/eps_detail.sql.j2").render(permno_list=permno_list, qtr=qtr, ann=ann)
+        return self.db.raw_sql(sql)
