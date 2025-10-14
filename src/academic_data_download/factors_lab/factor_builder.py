@@ -47,13 +47,19 @@ class FactorBuilder():
         self.wrds_manager = WRDSManager(db, verbose=verbose)
         self.save_path = save_path
         pvc = PriceVolComputer(permno_list=None, verbose=False, db=db)
-        mktcap_df = pvc.marketcap(name='marketcap')
-        pricevol_df = pvc.pricevol_processed(name='pricevol_processed')
+        self.spy_pricevol = PriceVolComputer(permno_list=[84398], verbose=False, db=db).pricevol_raw()
+
+        self.mktcap_df = pvc.marketcap(name='marketcap')
+        # sum up for every date, the biggest 500 mktcap companies
+        # to a new df
+        self.sp500_mktcap_df = self.mktcap_df.groupby('date').agg({'marketcap': 'sum'}).reset_index()
+
+        self.pricevol_df = pvc.pricevol_processed(name='pricevol_processed')
 
         if self.gvkey_list is not None:
-            self.mktcap_df = mktcap_df.query('gvkey in @gvkey_list')
+            self.mktcap_df = self.mktcap_df.query('gvkey in @gvkey_list')
         else:
-            self.mktcap_df = mktcap_df
+            self.mktcap_df = self.mktcap_df
 
     @factor
     def gross_profit_to_assets(self, qtr=True, name='f_gpta'):

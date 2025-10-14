@@ -44,17 +44,20 @@ taq_builder = TAQBuilder(verbose=True, db=db)
 
 # Hyperparameters and file paths
 start_year = 2013
+cutoff_upper = 2000
+cutoff_lower = 500
 pricevol_path = 'data/pricevol/pricevol_processed.parquet'
 ravenpack_equities_path = 'data/ravenpack/f_rp_ess.parquet'
 ravenpack_global_macro_path = 'data/ravenpack/f_rp_global_macro.parquet'
 factors_path = 'data/factors/combined/factors_combined.parquet'
 bbg_macro_var_path = glob.glob('data/Macro variables/*.xlsx')
-taq_path = 'data/taq/taq_retail_markethour_100000_0_2013-01-01_2024-12-31.parquet'
+taq_path = f'data/taq/processed/taq_retail_markethour_processed_{cutoff_upper}_{cutoff_lower}.parquet'
 
 price_target_all_data_path = 'data/combined/price_target_detail_all_data.parquet'
 
+
 os.makedirs('data/combined', exist_ok=True)
-combined_path = 'data/combined/taq_combined.parquet'
+combined_path = f'data/combined/price_target_all_data_with_taq_{cutoff_upper}_{cutoff_lower}.parquet'
 
 if __name__ == "__main__":
 
@@ -66,39 +69,19 @@ if __name__ == "__main__":
     taq_df['sym_suffix'] = taq_df['sym_suffix'].fillna('')
     taq_df['full_name'] = taq_df['sym_root'] + taq_df['sym_suffix']
 
-    # Step 2: Load and merge the TAQ link table to map symbols to PERMNOs
-    print("Step 2: Loading link table... merging with taq data")
-    link_table = taq_builder.taq_link_table(
-        start_date='2013-01-01',
-        permno_list=None,
-        symbol_root=taq_df['sym_root'].unique(),
-        date=None
-    )
-    link_table['sym_suffix'] = link_table['sym_suffix'].fillna('')
-    link_table['date'] = pd.to_datetime(link_table['date'])
-    taq_df = pd.merge(taq_df, link_table, on=['sym_root', 'sym_suffix', 'date'], how='inner')
-
     # Step 3: Load price/volume data and merge with TAQ data
     print("Step 3: Loading pricevol data... merging with taq data")
     pricevol = pd.read_parquet(pricevol_path)[['permno', 'date', 'vol']]
     pricevol['date'] = pd.to_datetime(pricevol['date'])
     pricevol = pricevol[pricevol['date'] >= f'{start_year}-01-01']
     pricevol['vol'] = round(pricevol['vol']/1000, 0)  # Convert volume to thousands
+    # Step 4: Compute shifted TAQ and volume features for various time windows
+    # for _day in list(range(-5, 23)) + [-66, -22, 66, 132, 198, 252]:
+    for _day in list(range(-5, 10)) + [-66, -22, 66, 132, 252]:
+        pricevol[f'vol_in_{_day}d'] = pricevol.groupby('permno')['vol'].transform(lambda x: x.shift(-_day))
 
     taq_df = pd.merge(taq_df, pricevol, left_on=['permno', 'date'], right_on=['permno', 'date'], how='left')
     
-    # Step 4: Compute shifted TAQ and volume features for various time windows
-    for _day in list(range(-5, 23)) + [-66, -22, 66, 132, 198, 252]:
-        taq_df[f'no_in_{_day}d'] = taq_df.groupby('full_name')['no'].transform(lambda x: x.shift(-_day))
-        taq_df[f'nob_in_{_day}d'] = taq_df.groupby('full_name')['nob'].transform(lambda x: x.shift(-_day))
-        taq_df[f'nos_in_{_day}d'] = taq_df.groupby('full_name')['nos'].transform(lambda x: x.shift(-_day))
-
-        taq_df[f's_in_{_day}d'] = taq_df.groupby('full_name')['s'].transform(lambda x: x.shift(-_day))
-        taq_df[f'sb_in_{_day}d'] = taq_df.groupby('full_name')['sb'].transform(lambda x: x.shift(-_day))
-        taq_df[f'ss_in_{_day}d'] = taq_df.groupby('full_name')['ss'].transform(lambda x: x.shift(-_day))
-        
-        taq_df[f'vol_in_{_day}d'] = taq_df.groupby('full_name')['vol'].transform(lambda x: x.shift(-_day))
-
     # Step 5: Load detailed price target revision data and filter by date
     print("Step 4: Loading price_target_all_data... ")
     price_target_all_data = pd.read_parquet(price_target_all_data_path)
@@ -131,5 +114,5 @@ if __name__ == "__main__":
     print("price_target_all_data with taq data: ", price_target_all_data)
 
     # Step 8: Save the final combined dataset to disk
-    price_target_all_data.to_parquet('data/combined/price_target_all_data_with_taq.parquet')
-    print("saved price_target_all_data with taq data to data/combined/price_target_all_data_with_taq.parquet")
+    price_target_all_data.to_parquet(combined_path)
+    print(f"saved price_target_all_data with taq data to {combined_path}")

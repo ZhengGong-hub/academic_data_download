@@ -20,8 +20,6 @@ gvkey_list = ['001690',
 
 FactorComputer = FactorBuilder(gvkey_list=gvkey_list, verbose=True, db=db, save_path=FACTOR_PATH)
 
-assert False
-
 FactorComputer.gross_profit_to_assets(qtr=True, name='f_gpta')
 FactorComputer.sales_to_price(qtr=True, name='f_sp')
 FactorComputer.btm(qtr=True, name='f_btm')

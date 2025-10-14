@@ -46,6 +46,12 @@ class TAQBuilder():
         """
         TAQ:
         """
+        agg_save_path = f'{self.save_path}/{name}_{retail_cutoff_upper}_{retail_cutoff_lower}_{start_date}_{end_date}.parquet'
+        # if the file exists, return the df and don't compute again
+        if os.path.exists(f'{agg_save_path}'):
+            print(f'{agg_save_path} already exists')
+            return pd.read_parquet(f'{agg_save_path}')
+        
         permno_list = self.analyst_estimation_builder.price_target_detail()['permno'].unique()
         trading_dates = self.pricevol_builder.pricevol_processed().query(f"date>'{start_date}' and date<'{end_date}'")['date'].unique()
 
@@ -64,16 +70,40 @@ class TAQBuilder():
             sym_root_list = link_df['sym_root'].unique()
 
             df = self.wrds_manager.get_taq_retail_markethour(date=date, sym_root_list=sym_root_list, retail_cutoff_upper=retail_cutoff_upper, retail_cutoff_lower=retail_cutoff_lower)
-            print(df)
+            print(df.head())
             df.to_parquet(ind_save_path)
         
         if combine:
-            print(f"Combining all the parts into one file: {self.save_path}/{name}_{retail_cutoff_upper}_{retail_cutoff_lower}_{start_date}_{end_date}.parquet")
+            print(f"Combining all the parts into one file: {agg_save_path}")
+            link_df = self.taq_link_table(date=None, permno_list=None)
+            link_df['sym_suffix'] = link_df['sym_suffix'].fillna('')
+
             # combine all the parts into one file
             part_files = glob.glob(f'{self.save_path}/parts/{retail_cutoff_upper}_{retail_cutoff_lower}/{name}*.parquet')
-            df = pd.concat([pd.read_parquet(file) for file in part_files])
-            df.to_parquet(f'{self.save_path}/{name}_{retail_cutoff_upper}_{retail_cutoff_lower}_{start_date}_{end_date}.parquet')
-        return 'Done with TAQ retail markethour!'
+            df = pd.concat([pd.read_parquet(file) for file in part_files]).sort_values(by=['date'])
+            df['sym_suffix'] = df['sym_suffix'].fillna('')
+            df = pd.merge(df, link_df, on=['sym_root', 'sym_suffix', 'date'], how='inner')
+            df.to_parquet(f'{agg_save_path}')
+            return df
+    
+    def taq_retail_markethour_processed(self, retail_cutoff_upper = 100000, retail_cutoff_lower = 0, name='taq_retail_markethour_processed'):
+        taq_retail_df = self.taq_retail_markethour(retail_cutoff_upper=retail_cutoff_upper, retail_cutoff_lower=retail_cutoff_lower, combine=True).sort_values(by=['date'])
+        taq_retail_df['full_name'] = taq_retail_df['sym_root'] + taq_retail_df['sym_suffix']
+
+        print("Computing shifted TAQ and volume features for various time windows...")
+        for _day in list(range(-5, 10)) + [-66, -22, 66, 132, 252]:
+            taq_retail_df[f'no_in_{_day}d'] = taq_retail_df.groupby('full_name')['no'].transform(lambda x: x.shift(-_day))
+            taq_retail_df[f'nob_in_{_day}d'] = taq_retail_df.groupby('full_name')['nob'].transform(lambda x: x.shift(-_day))
+            taq_retail_df[f'nos_in_{_day}d'] = taq_retail_df.groupby('full_name')['nos'].transform(lambda x: x.shift(-_day))
+
+            taq_retail_df[f's_in_{_day}d'] = taq_retail_df.groupby('full_name')['s'].transform(lambda x: x.shift(-_day))
+            taq_retail_df[f'sb_in_{_day}d'] = taq_retail_df.groupby('full_name')['sb'].transform(lambda x: x.shift(-_day))
+            taq_retail_df[f'ss_in_{_day}d'] = taq_retail_df.groupby('full_name')['ss'].transform(lambda x: x.shift(-_day))
+            
+        print("Saving the processed TAQ data...")
+        os.makedirs(f'{self.save_path}/processed', exist_ok=True)
+        taq_retail_df.to_parquet(f'{self.save_path}/processed/{name}_{retail_cutoff_upper}_{retail_cutoff_lower}.parquet')
+        return taq_retail_df
 
     def taq_link_table(self, date='2021-12-31', permno_list=None, symbol_root=None, name='_taq_link_table', start_date='2013-01-01'):
         """
