@@ -238,3 +238,7 @@ class WRDSManager():
     def get_eps_detail(self, permno_list=None, qtr=True, ann=True):
         sql = env.get_template("analyst_estimation/eps_detail.sql.j2").render(permno_list=permno_list, qtr=qtr, ann=ann)
         return self.db.raw_sql(sql)
+    
+    def get_eps_act(self, permno_list=None, qtr=True, ann=True):
+        sql = env.get_template("analyst_estimation/eps_act.sql.j2").render(permno_list=permno_list, qtr=qtr, ann=ann)
+        return self.db.raw_sql(sql)

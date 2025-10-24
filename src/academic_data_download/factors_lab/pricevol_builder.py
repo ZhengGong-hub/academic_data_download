@@ -118,7 +118,7 @@ class PriceVolComputer():
         # moving averages 
         # TODO
 
-        print(df.query('mktcap > 5 and turnover > 10 and tpci != "%" and prccd > 10 and prccd < 200').sort_values('turnover', ascending=False).head(50))
+        print(df.query('mktcap > 5 and turnover > 5 and tpci != "%" and prccd > 10 and prccd < 200').sort_values('turnover', ascending=False).head(50))
         print(df.columns.to_list())
         # print(df.sort_values("mktcap", ascending=False).head(50))
         assert False

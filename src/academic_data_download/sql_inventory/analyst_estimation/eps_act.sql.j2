@@ -1,0 +1,47 @@
+WITH ibes_clean AS (
+  SELECT
+      a.cusip,
+      a.measure,
+      a.value as eps_act,
+      a.pdicity,
+      a.pends,
+      a.oftic,
+      (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) AS ann_ts,
+      (a.actdats::date + COALESCE(a.acttims::time, TIME '00:00:00')) AS act_ts,
+      -- if ann_ts is after 4pm, then count it to next day
+      CASE
+          WHEN (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::time >= TIME '16:00:00'
+          THEN ((a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00')) + INTERVAL '1 day')::date
+          ELSE (a.anndats::date + COALESCE(a.anntims::time, TIME '00:00:00'))::date
+      END AS ann_deemed_date
+  FROM ibes.nactu_epsus a
+  WHERE a.usfirm = 1
+  AND a.measure = 'EPS'
+  AND a.curr_act = 'USD'
+  {% if qtr %}
+  AND a.pdicity = 'QTR'
+  {% endif %}
+  {% if ann %}
+  AND a.pdicity = 'ANN'
+  {% endif %}
+)
+SELECT
+ i.*,
+ ds.permno,
+ ds.permco
+FROM ibes_clean i
+LEFT JOIN crsp.dsenames ds
+  ON i.cusip = ds.cusip
+  AND i.ann_ts::date >= ds.namedt
+  AND i.ann_ts::date <= coalesce(ds.nameendt, DATE '2099-12-31')
+WHERE
+    1=1
+    AND i.ann_ts::date >= DATE '2010-01-01'
+    AND ds.permno IS NOT NULL
+    AND ds.permco IS NOT NULL
+    {% if permno_list %}
+    AND ds.PERMNO IN ({{ permno_list | join(', ') }})
+    {% endif %}
+    AND i.act_ts >= i.ann_ts      -- record time not before announcement time
+
+ORDER BY i.ann_ts;
