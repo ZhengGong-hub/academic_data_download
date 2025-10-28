@@ -1097,4 +1097,222 @@ class FactorComputer():
             sneak_peek(daily_df)
         save_file(daily_df, name, path=path)
         return f'Done with {name}'
-        
+    
+
+# New measures for anomaly variable
+
+
+    def net_stock_issues(self, qtr=True, name='f_nsi'):
+        """
+        Net stock issues:
+        Log change in split-adjusted shares outstanding
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:
+            # cshoq: common shares outstanding, adjex: cumulative adjustment factor
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["cshoq", "adjex"]) 
+
+            # Get lagged values
+            fund_df['cshoq_lag'] = shift_n_rows(fund_df, 'cshoq', 4)
+            fund_df['adjex_lag'] = shift_n_rows(fund_df, 'adjex', 4)
+
+            # Calculate net stock issues
+            fund_df[name] = np.log(fund_df["cshoq"] * fund_df["adjex"]) - np.log(fund_df["cshoq_lag"] * fund_df["adjex_lag"])
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(fund_df)
+            if self.gvkey_list is None:
+                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}' 
+    
+
+    def composite_equity_issues(self, qtr=True, name='f_cei'):
+        """
+        Composite equity issues:
+        12-month log growth in market equity minus 12-month log cumulative stock return
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["saleq"]) # just to get date
+
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+
+            # merge the fund_df and price_df
+            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+            mktcap_df = merge_mktcap_fundq(mktcap_df, pricevol)
+
+            # Get lagged values
+            mktcap_df['marketcap_lag'] = shift_n_rows(mktcap_df, 'marketcap', 252) # Shift depends on trading days vs. quarterly
+            mktcap_df['return'] = mktcap_df['cum_ret_252d']
+
+            # Calculate Composite Equity Issues
+            mktcap_df[name] = np.log(mktcap_df["marketcap"] / mktcap_df["marketcap_lag"]) - np.log(1 + mktcap_df["return"])
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(mktcap_df)
+
+            if self.gvkey_list is None:
+                save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}'
+    
+
+
+    def momentum(self, qtr=True, name='f_mom'):
+        """
+        Momentum:
+        Cumulative returns from month t-12 to t-2
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+
+            # merge the fund_df and price_df
+            mktcap_df = merge_mktcap_fundq(mktcap_df, pricevol)
+
+            # Get returns
+            mktcap_df['marketcap_lag'] = shift_n_rows(mktcap_df, 'marketcap', 252) # Shift depends on trading days vs. quarterly
+            mktcap_df['return_year'] = mktcap_df['cum_ret_252d']
+            mktcap_df['return_month'] = mktcap_df['cum_ret_22d']
+
+            # Calculate Momentum
+            mktcap_df[name] = (mktcap_df['return_month'] / mktcap_df['return_year']) - 1
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(mktcap_df)
+
+            if self.gvkey_list is None:
+                save_file(mktcap_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}'
+    
+    
+
+    def net_operating_assets(self, qtr=True, name='f_noa'):
+        """
+        Net operating assets:
+        Difference between operating assets and operating liabilities, scaled by total assets
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:            
+            # atq: total assets, cheq: cash and short-term investments, 
+            # dlttq: long-term debt, dlcq: short-term debt, ceqq: common equity, pstkq: preferred equity, mibq: minority interest
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"])
+
+            # Fill forward for LTM values
+            ltm_cols = ["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]
+            for col in ltm_cols:
+                fund_df[col] = fill_forward(fund_df, col) # the rest are bs terms
+
+            # Calculate net operating assets
+            fund_df['operating_assets'] = fund_df["atq"] - fund_df["cheq"]
+            fund_df['operating_liabilities'] = fund_df["atq"] - fund_df["dlttq"] - fund_df["dlcq"] - fund_df["ceqq"] - fund_df["pstkq"] - fund_df["mibq"] # We should add the following: Stambaugh write that if PSTK or MIB are missing, they are put to zero
+            fund_df["noaq"] = (fund_df["operating_assets"] - fund_df["operating_liabilities"]) / fund_df["atq"]
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(fund_df)
+            if self.gvkey_list is None:
+                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}' 
+    
+
+
+    def o_score(self, qtr=True, name='f_oscore'):
+        """
+        O-score:
+        Probability of bankruptcy
+        """
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:            
+            # atq: total assets, dlcq: debt in current liabilities, dlttq: total long-term debt, actq: current assets,
+            # ltq: total liabilities, niq: net income, piq: pretax income, 
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["atq", "dlcq", "dlttq", "actq", "ltq", "niq", "piq"])
+
+            # Fill forward for LTM values
+            ltm_cols = ["atq", "dlttq", "dlcq", "actq", "ltq"]
+            for col in ltm_cols:
+                fund_df[col] = fill_forward(fund_df, col)
+
+            fund_df['niq_ltm'] = rolling_sum(fund_df, 'niq')
+            fund_df['piq_ltm'] = rolling_sum(fund_df, 'piq')
+
+            # Get lagged values of net income
+            fund_df['niq_lag'] = shift_n_rows(fund_df, 'niq_ltm', 4)
+
+            # Calculate components
+            fund_df['size'] = np.log(fund_df['atq'])
+            fund_df['tlta'] = (fund_df['dlcq'] + fund_df['dlttq']) / fund_df['atq']
+            fund_df['wcta'] = (fund_df['actq'] - fund_df['lctq']) / fund_df['atq']
+            fund_df['clca'] = fund_df['lctq'] / fund_df['actq']
+            fund_df['oneeg'] = np.where(fund_df['ltq'] > fund_df['atq'],1,0)
+            fund_df['nita'] = fund_df['niq_ltm'] / fund_df['atq']
+            fund_df['futl'] = fund_df['piq_ltm'] / fund_df['ltq']
+            fund_df['intwo'] = np.where((fund_df['niq_ltm'] < 0) & (fund_df['niq_lag'] < 0),1,0)
+            fund_df['chin'] = (fund_df['niq_ltm'] - fund_df['niq_lag']) / (abs(fund_df['niq_ltm']) + abs(fund_df['niq_lag']))
+
+            # Calculate the O-score
+            fund_df[name] = -0.407*fund_df['size'] + 6.03*fund_df['tlta'] - 1.43*fund_df['wcta'] + 0.076*fund_df['clca'] - 1.72*fund_df['oeneg'] - 2.37*fund_df['nita'] - 1.83*fund_df['futl'] + 0.285*fund_df['intwo'] - 0.521*fund_df['chin'] - 1.32
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(fund_df)
+            if self.gvkey_list is None:
+                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}' 
+
+
+    def distress(self, qtr=True, name='f_noa'):
+
+        if not check_if_calculation_needed(name, self.gvkey_list):
+            return f'Done with {name}'
+        if qtr:            
+            # niq: net income, ltq: total liabilities, 
+            # cheq: cash and short-term investment
+            fund_df = get_fundq(db=self.db, gvkey_list=self.gvkey_list, fund_list=["niq", "ltq", "cheq"])
+
+            mktcap_df = marketcap_calculator(self.db, self.gvkey_list)
+
+            # merge the fund_df and price_df
+            mktcap_df = merge_mktcap_fundq(mktcap_df, fund_df)
+            mktcap_df = merge_mktcap_fundq(mktcap_df, pricevol)
+
+            # Calculate components
+            mktcap_df["nimta"] = mktcap_df["niq"] / (mktcap_df["ltq"] + mktcap_df["marketcap"])
+            mktcap_df["exret"] = np.log(1+mktcap_df["cum_ret_22d"]) - np.log(1+mktcap_df["sp_return"])
+            mktcap_df["tlmta"] = mktcap_df["ltq"] / (mktcap_df["ltq"] + mktcap_df["marketcap"])
+#########################
+            # Get returns
+            mktcap_df['marketcap_lag'] = shift_n_rows(mktcap_df, 'marketcap', 252) # Shift depends on trading days vs. quarterly
+            mktcap_df['return_year'] = mktcap_df['cum_ret_252d']
+            mktcap_df['return_month'] = mktcap_df['cum_ret_22d']
+
+
+
+
+
+
+
+
+            # Fill forward for LTM values
+            ltm_cols = ["atq", "cheq", "dlttq", "dlcq", "ceqq", "pstkq", "mibq"]
+            for col in ltm_cols:
+                fund_df[col] = fill_forward(fund_df, col) # the rest are bs terms
+
+            # Calculate net operating assets
+            fund_df['operating_assets'] = fund_df["atq"] - fund_df["cheq"]
+            fund_df['operating_liabilities'] = fund_df["atq"] - fund_df["dlttq"] - fund_df["dlcq"] - fund_df["ceqq"] - fund_df["pstkq"] - fund_df["mibq"] # We should add the following: Stambaugh write that if PSTK or MIB are missing, they are put to zero
+            fund_df["noaq"] = (fund_df["operating_assets"] - fund_df["operating_liabilities"]) / fund_df["atq"]
+
+            if self.verbose:
+                print("peeks at the data after calculation!")
+                sneak_peek(fund_df)
+            if self.gvkey_list is None:
+                save_file(fund_df, name) # only save the file if gvkey_list is None (meaning select all)
+        return f'Done with {name}' 
