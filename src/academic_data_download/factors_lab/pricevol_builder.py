@@ -86,6 +86,22 @@ class PriceVolComputer():
         return df
 
     @pricevol
+    def pricevol_processed_past_prc(self, name='pricevol_processed_past_prc'):
+        """
+        Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
+        """
+        # drop all column that starts with 'cum_ret' 
+        df = self.pricevol_processed(name='pricevol_processed')
+        df = df.drop(columns=[col for col in df.columns if col.startswith('cum_ret')])
+    
+        for _day in [252, 5, 126, 22, 1, 66, 10]:
+            print(f"Calculating {_day}-day past price...")
+            df[f'past_{_day}d_prc'] = df.groupby(['permno'])['adjclose'].transform(
+                lambda x: x.shift(_day)
+            )
+        return df
+
+    @pricevol
     def marketcap(self, name='marketcap'):
         # get link table
         permco_gvkey_link_df = self.wrds_manager.permco_gvkey_link()
@@ -107,7 +123,6 @@ class PriceVolComputer():
         mktcap_df = merge_permco_gvkey_link(mktcap_df, permco_gvkey_link_df)
         return mktcap_df
     
-    @pricevol
     def live_pricevol(self, name='live_pricevol', start_date=None, end_date=None):
         # get link table
         df = self.wrds_manager.get_secd_daily(start_date=start_date, end_date=end_date)
@@ -121,4 +136,3 @@ class PriceVolComputer():
         print(df.query('mktcap > 5 and turnover > 5 and tpci != "%" and prccd > 10 and prccd < 200').sort_values('turnover', ascending=False).head(50))
         print(df.columns.to_list())
         # print(df.sort_values("mktcap", ascending=False).head(50))
-        assert False

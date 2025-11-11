@@ -82,6 +82,13 @@ class AnalystEstimationBuilder():
         df['last_pt'] = df.groupby('analyst_coverage_id')['pt'].transform(lambda x: x.shift(1))
         df['last_ann_deemed_date'] = df.groupby('analyst_coverage_id')['ann_deemed_date'].transform(lambda x: x.shift(1))
         return df
+    
+    @analyst_estimator
+    def eps_summary_qtr(self, name='eps_summary_qtr'):
+        """
+        """
+        df = self.wrds_manager.get_eps_summary(permno_list=self.permno_list, qtr=True, ann=False)
+        return df
 
     @analyst_estimator
     def eps_detail_qtr(self, name='eps_detail_qtr'):

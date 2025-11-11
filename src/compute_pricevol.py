@@ -18,4 +18,5 @@ permno_list = None
 PriceVolComputer = PriceVolComputer(permno_list=permno_list, verbose=True, db=db)
 # PriceVolComputer.pricevol_processed(name='pricevol_processed')
 # PriceVolComputer.marketcap(name='marketcap')
-PriceVolComputer.live_pricevol(name='live_pricevol', start_date='2025-10-08', end_date='2025-10-08')
+PriceVolComputer.live_pricevol(name='live_pricevol', start_date='2025-10-20', end_date='2025-10-20')
+PriceVolComputer.pricevol_processed_past_prc(name='pricevol_processed_past_prc')
