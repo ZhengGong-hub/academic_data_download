@@ -20,6 +20,12 @@ TAQBuilder.taq_peek(name='taq_peek', sym_root_list=['BRK'], year=2025, date='202
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2013-01-01', end_date='2024-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=30000, retail_cutoff_lower=10000, start_date='2019-12-31', end_date='2024-12-31')
 TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=100000, retail_cutoff_lower=0)
+TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=100000, retail_cutoff_lower=30000)
+TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=30000, retail_cutoff_lower=10000)
+TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=10000, retail_cutoff_lower=2000)
+TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=2000, retail_cutoff_lower=500)
+TAQBuilder.taq_retail_markethour_processed(retail_cutoff_upper=500, retail_cutoff_lower=0)
+
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2021-12-31', end_date='2022-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2023-01-01', end_date='2023-12-31')
 # TAQBuilder.taq_retail_markethour(name='taq_retail_markethour', retail_cutoff_upper=10000, retail_cutoff_lower=2000, start_date='2024-01-01', end_date='2024-12-31')

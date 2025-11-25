@@ -62,7 +62,7 @@ class PriceVolComputer():
         df['ret'] = round(df['ret'], 4)
         df['retx'] = round(df['retx'], 4)
 
-        for _day in [252, 5, 126, 22, 1]:
+        for _day in [252, 126, 22, 5, 4, 3, 2, 1]:
             print(f"Calculating {_day}-day cumulative return (including dividends)...")
             df[f'cum_ret_{_day}d'] = round(df.groupby(['permno'])['ret'].transform(
                 lambda x: x.rolling(window=_day).apply(lambda y: np.prod(1 + y) - 1)
@@ -122,6 +122,20 @@ class PriceVolComputer():
         # merge with link table
         mktcap_df = merge_permco_gvkey_link(mktcap_df, permco_gvkey_link_df)
         return mktcap_df
+
+    @pricevol
+    def stock_split(self, name='stock_split'):
+        """
+        Retrieve stock split data.
+        """
+        pricevol_df = self.pricevol_raw()
+
+        # when cfacpr differs from last row, it means a stock split has happened
+        # so we need to calculate the ratio of the current cfacpr to the last cfacpr
+        pricevol_df['stock_split'] = pricevol_df.groupby('permno')['cfacpr'].shift(1) / pricevol_df['cfacpr']
+
+        stock_split = pricevol_df.query('stock_split != 1 and stock_split.notna()')
+        return stock_split
     
     def live_pricevol(self, name='live_pricevol', start_date=None, end_date=None):
         # get link table

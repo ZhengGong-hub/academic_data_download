@@ -385,3 +385,33 @@ class AnalystEstimationBuilder():
         pt_detail = pd.merge_asof(pt_detail, y1_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
         pt_detail = pd.merge_asof(pt_detail, y2_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
         return pt_detail
+
+
+    @analyst_estimator
+    def pt_detail_with_earnings_date(self, name='pt_detail_with_earnings_date'):
+        """
+        Build a DataFrame aligning analyst price targets with earnings dates.
+
+        For each company and analyst:
+        - Annotates each price target date with: next earnings date,
+          nearest EPS estimates & price targets (before/after), and the same for the next period.
+        - Useful for event studies/research needing precise temporal linking of forecasts, 
+          realized earnings, and price targets.
+        """
+        def _extract_eps_estimate_subdf(df, fpi_code, eps_label):
+            """
+            Helper to extract EPS estimates by forecast period identifier (fpi).
+            Renames columns for clarity and adds a timestamp column for the estimate.
+            """
+        pt_detail = self.price_target_detail_revision().drop(columns=['act', 'namedt', 'nameendt']).sort_values(by=['ann_deemed_date'])
+        pt_detail['ann_deemed_date'] = pd.to_datetime(pt_detail['ann_deemed_date'])
+
+        eps_act_qtr = self.eps_act_qtr()
+        eps_act_qtr['ann_deemed_date'] = pd.to_datetime(eps_act_qtr['ann_deemed_date'])
+
+        # merge the next earnings date with the pt_detail with merge_asof
+        pt_detail = pd.merge_asof(pt_detail, eps_act_qtr[['permno', 'ann_deemed_date']].rename(columns={'ann_deemed_date': 'next_earnings_date'}), left_on=['ann_deemed_date'], right_on=['next_earnings_date'], by=['permno'], direction='forward')
+
+        # merge the last earnings date with the pt_detail with merge_asof
+        pt_detail = pd.merge_asof(pt_detail, eps_act_qtr[['permno', 'ann_deemed_date']].rename(columns={'ann_deemed_date': 'last_earnings_date'}), left_on=['ann_deemed_date'], right_on=['last_earnings_date'], by=['permno'], direction='backward')
+        return pt_detail
