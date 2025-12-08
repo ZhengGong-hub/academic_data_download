@@ -28,7 +28,8 @@ def factor(fn: Callable) -> Callable:
         print("dealing with: ", nm)
         if not check_if_calculation_needed(nm, self.gvkey_list, self.save_path):
             print("Already computed. Done with: ", nm)
-            return
+            df = pd.read_parquet(f'{self.save_path}/{nm}.parquet')
+            return df
         df = fn(self, *args, **kwargs)
         if not isinstance(df, pd.DataFrame):
             raise ValueError(f"{fn.__name__} must return a DataFrame, got {type(df)}")

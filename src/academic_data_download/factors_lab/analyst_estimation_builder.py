@@ -358,32 +358,21 @@ class AnalystEstimationBuilder():
         pt_detail = self.price_target_detail_revision().drop(columns=['act', 'namedt', 'nameendt']).sort_values(by=['ann_deemed_date'])
         pt_detail['ann_deemed_date'] = pd.to_datetime(pt_detail['ann_deemed_date'])
 
-        eps_detail_qtr = self.eps_detail_qtr().rename(columns={'fpedats': 'pends'})
+        eps_detail_qtr = self.eps_detail_qtr().rename(columns={'fpedats': 'pends'}).sort_values(by=['ann_deemed_date'])
         eps_detail_qtr['ann_deemed_date'] = pd.to_datetime(eps_detail_qtr['ann_deemed_date'])
+
+        # for each pends, keep the last value, per permno and analys 
+        eps_detail_qtr = eps_detail_qtr.groupby(['permno', 'pends', 'analys']).last().reset_index()
 
         eps_act_qtr = self.eps_act_qtr()
         eps_act_qtr['eps_act_date'] = pd.to_datetime(eps_act_qtr['ann_deemed_date'])
 
         eps_detail_qtr = pd.merge(eps_detail_qtr, eps_act_qtr[['permno', 'pends', 'eps_act', 'eps_act_date']], on=['permno', 'pends'], how='left')
-
-        q1_eps = _extract_eps_estimate_subdf(eps_detail_qtr, '6', 'q1_eps')
-        q2_eps = _extract_eps_estimate_subdf(eps_detail_qtr, '7', 'q2_eps')
-
-        eps_detail_ann = self.eps_detail_ann()
-        eps_detail_ann['ann_deemed_date'] = pd.to_datetime(eps_detail_ann['ann_deemed_date'])
-
-        eps_act_ann = self.eps_act_ann()
-        eps_act_ann['eps_act_date'] = pd.to_datetime(eps_act_ann['ann_deemed_date'])
-
-        eps_detail_ann = pd.merge(eps_detail_ann, eps_act_ann[['permno', 'eps_act', 'eps_act_date']], on=['permno'], how='left')
-
-        y1_eps = _extract_eps_estimate_subdf(eps_detail_ann, '1', 'y1_eps')
-        y2_eps = _extract_eps_estimate_subdf(eps_detail_ann, '2', 'y2_eps')
+        eps_detail_qtr = eps_detail_qtr[['permno', 'analys', 'value', 'eps_act', 'eps_act_date']].rename(columns={'value': 'eps_est', 'analys': 'amaskcd'})
+        eps_detail_qtr = eps_detail_qtr.dropna(subset=['eps_act_date'])
+        eps_detail_qtr.sort_values(by=['eps_act_date'], inplace=True)
         
-        pt_detail = pd.merge_asof(pt_detail, q1_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
-        pt_detail = pd.merge_asof(pt_detail, q2_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
-        pt_detail = pd.merge_asof(pt_detail, y1_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
-        pt_detail = pd.merge_asof(pt_detail, y2_eps, on=['ann_deemed_date'], by=['permno', 'amaskcd'], direction='backward')
+        pt_detail = pd.merge_asof(pt_detail, eps_detail_qtr, left_on=['ann_deemed_date'], right_on=['eps_act_date'], by=['permno', 'amaskcd'], direction='backward')
         return pt_detail
 
 

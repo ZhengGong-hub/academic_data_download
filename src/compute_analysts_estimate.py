@@ -22,6 +22,6 @@ AnalystEstimationBuilder = AnalystEstimationBuilder(permno_list=permno_list, ver
 # AnalystEstimationBuilder.eps_detail_qtr(name='eps_detail_qtr')
 # AnalystEstimationBuilder.eps_detail_ann(name='eps_detail_ann')
 # AnalystEstimationBuilder.pt_detail_with_eps_estimate(name='pt_detail_with_eps_estimate')
-AnalystEstimationBuilder.pt_detail_with_earnings_date(name='pt_detail_with_earnings_date')
-
+# AnalystEstimationBuilder.pt_detail_with_earnings_date(name='pt_detail_with_earnings_date')
+AnalystEstimationBuilder.pt_detail_with_eps_estimate(name='pt_detail_with_eps_estimate')
 

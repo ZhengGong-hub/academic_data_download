@@ -246,3 +246,7 @@ class WRDSManager():
     def get_eps_summary(self, permno_list=None, qtr=True, ann=True):
         sql = env.get_template("analyst_estimation/eps_summary.sql.j2").render(permno_list=permno_list, qtr=qtr, ann=ann)
         return self.db.raw_sql(sql)
+
+    def get_fama_french_5_with_mom_factors(self):
+        sql = env.get_template("pricevol/ff5_with_mom.sql.j2").render()
+        return self.db.raw_sql(sql)

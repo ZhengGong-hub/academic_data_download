@@ -19,7 +19,12 @@ dependencies = [
     "tqdm>=4.67.1",
     "openpyxl",
     "jinja2",
-    "boto3"
+    "boto3",
+    "statsmodels",
+    "requests",
+    "bs4",
+    "lxml",
+    "tqdm"
 ]
 
 [tool.black]

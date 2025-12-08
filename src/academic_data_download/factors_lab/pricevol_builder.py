@@ -4,12 +4,14 @@ import numpy as np
 from typing import Callable
 from functools import wraps
 import inspect
+from tqdm import tqdm
 
 from academic_data_download.utils.save_file import save_file
 from academic_data_download.utils.necessary_cond_calculation import check_if_calculation_needed
 from academic_data_download.utils.sneak_peek import sneak_peek
 from academic_data_download.db_manager.wrds_sql import WRDSManager
 from academic_data_download.utils.merger import merge_permco_gvkey_link, merge_link_table_crsp
+from academic_data_download.utils.calc_car import calculate_car
 
 def pricevol(fn: Callable) -> Callable:
     @wraps(fn)
@@ -38,11 +40,83 @@ class PriceVolComputer():
         self.save_path = 'data/pricevol'
 
     @pricevol
+    def fama_french_5_with_mom_factors(self, name='fama_french_5_with_mom_factors'):
+        """
+        Retrieve Fama French 5 factors with momentum factor.
+        """
+        df = self.wrds_manager.get_fama_french_5_with_mom_factors()
+        df['date'] = pd.to_datetime(df['date'])
+        return df
+
+    @pricevol
     def pricevol_raw(self, name='pricevol_raw'):
         """
         Retrieve raw price and volume data.
         """
         df = self.wrds_manager.get_crsp_daily(cache_path=f'{self.save_path}/pricevol_raw.parquet', permno_list=self.permno_list)
+        return df
+
+    @pricevol
+    def car(self, type = "ff6", name='car_ff6'):
+        """
+        """
+        df = self.pricevol_raw(name='pricevol_raw')
+        df['date'] = pd.to_datetime(df['date'])
+
+        addr = 'data/car/individual/' + type + '/'
+
+        for companyid in tqdm(df['permno'].unique()):
+            price_df = df.query('permno == @companyid')
+            car = calculate_car(companyid, price_df, type=type, factor_calc_lag=0, rolling_window=252, addr=addr)
+
+        res = []
+        import glob
+        addr = glob.glob(addr + '/*.parquet')
+        for addr in tqdm(addr):
+            car_df = pd.read_parquet(addr)
+            res.append(car_df)
+        res = pd.concat(res)
+        return res
+
+    @pricevol
+    def car_with_lag_factors(self, type = "ff6", name='car_ff6_with_lag_factors'):
+        """
+        """
+        df = self.pricevol_raw(name='pricevol_raw')
+        df['date'] = pd.to_datetime(df['date'])
+
+        addr = 'data/car/individual/' + type + '_with_lag_factors/'
+
+        for companyid in tqdm(df['permno'].unique()):
+            price_df = df.query('permno == @companyid')
+            car = calculate_car(companyid, price_df, type=type, factor_calc_lag=50, rolling_window=150, addr=addr)
+
+        res = []
+        import glob
+        addr = glob.glob(addr + '/*.parquet')
+        for addr in tqdm(addr):
+            car_df = pd.read_parquet(addr)
+            res.append(car_df)
+        res = pd.concat(res)
+        return res
+
+
+    @pricevol 
+    def pricevol_with_car_processed(self, name='pricevol_with_car_processed'):
+        """
+        Retrieve raw price and volume data, then calculate adjusted close, cumulative and forward returns.
+        """
+        df = self.pricevol_with_car(name='pricevol_with_car')
+        
+        for _day in [252, 126, 22, 5, 4, 3, 2, 1]:
+            print(f"Calculating {_day}-day cumulative CAR part1...")
+            df[f'car_{_day}d'] = round(df.groupby(['permno'])['ar'].transform(
+                lambda x: x.rolling(window=_day).apply(lambda y: np.prod(1 + y) - 1)
+            ), 4)
+            print(f"Calculating {_day}-day forward CAR part2...")
+            df[f'fwd_car_{_day}d'] = round(df.groupby(['permno'])[f'car_{_day}d'].transform(
+                lambda x: x.shift(-_day)
+            ), 4)
         return df
 
     @pricevol
@@ -55,6 +129,7 @@ class PriceVolComputer():
 
         # get pricevol data
         df = self.pricevol_raw()
+
         print("Converting date column to datetime...")
         df['date'] = pd.to_datetime(df['date'])
         print("Calculating adjusted close price...")
@@ -83,6 +158,18 @@ class PriceVolComputer():
 
         # merge with link table
         df = merge_link_table_crsp(crsp_df=df, link_df=permco_gvkey_link_df)
+        return df
+
+
+    @pricevol
+    def pricevol_processed_with_past_vol(self, name='pricevol_processed_with_past_vol'):
+        """
+        """
+        df = self.pricevol_processed(name='pricevol_processed')
+    
+        for _day in list(range(-5, 10)) + [-66, -22, 66, 132, 252]:
+            df[f'vol_in_{_day}d'] = df.groupby('permno')['vol'].transform(lambda x: x.shift(-_day))
+
         return df
 
     @pricevol
